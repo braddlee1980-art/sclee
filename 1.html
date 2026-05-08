@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>얼굴 타이밍 맞추기 게임 V2</title>
+    <style>
+        /* 전체 페이지 배경 */
+        body {
+            background-color: #f0f0f0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-family: 'Pretendard', sans-serif;
+            overflow: hidden;
+        }
+
+        /* 게임 컨테이너 (배경 투명) */
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 400px;
+            background-color: transparent;
+            border-bottom: 2px solid #ddd;
+            display: flex;
+            align-items: center; /* 자식 요소들을 세로 중앙에 배치 */
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* 상단 점수판 */
+        .scoreboard {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .score-box {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+        .high-score {
+            font-size: 16px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        /* 중앙 가이드 (face_image_bg.png 사용) */
+        #target-guide {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            background-image: url('face_image_bg.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* 움직이는 얼굴 이미지 (face_image.png 사용) */
+        #face {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            background-image: url('face_image.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-color: transparent;
+            left: 800px; /* 초기 위치 오른쪽 끝 */
+            z-index: 2;
+        }
+
+        /* 하단 컨트롤 레이아웃 */
+        .controls {
+            margin-top: 30px;
+            display: flex;
+            gap: 15px;
+        }
+
+        button {
+            padding: 12px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            transition: transform 0.1s, background-color 0.2s;
+        }
+
+        #start-btn { background-color: #4CAF50; color: white; }
+        #stop-btn { background-color: #f44336; color: white; }
+
+        button:active { transform: scale(0.95); }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        /* 상태 메시지 */
+        #message {
+            margin-top: 15px;
+            font-weight: bold;
+            height: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="scoreboard">
+        <div class="score-box">Score: <span id="current-score">0</span></div>
+        <div class="high-score">High Score: <span id="high-score">0</span></div>
+    </div>
+
+    <div id="game-container">
+        <div id="target-guide"></div>
+        <div id="face"></div>
+    </div>
+
+    <div id="message"></div>
+
+    <div class="controls">
+        <button id="start-btn">시작 (Enter)</button>
+        <button id="stop-btn" disabled>멈춰! (Space)</button>
+    </div>
+
+    <script>
+        const face = document.getElementById('face');
+        const container = document.getElementById('game-container');
+        const startBtn = document.getElementById('start-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const scoreDisplay = document.getElementById('current-score');
+        const highScoreDisplay = document.getElementById('high-score');
+        const messageDisplay = document.getElementById('message');
+
+        let score = 0;
+        let highScore = localStorage.getItem('faceGameHighScore') || 0;
+        
+        // 속도 조절: 기존 4에서 2/3 수준인 약 2.6으로 하향 조정
+        const initialSpeed = 2.6; 
+        let speed = initialSpeed;
+        
+        let position = 800;
+        let isPlaying = false;
+        let animationId;
+
+        highScoreDisplay.textContent = highScore;
+
+        // 정확한 중앙 위치 계산
+        const targetX = (container.offsetWidth / 2) - (face.offsetWidth / 2);
+
+        function update() {
+            if (!isPlaying) return;
+
+            position -= speed;
+            
+            // 왼쪽 끝으로 사라지면 다시 오른쪽에서 등장
+            if (position < -120) {
+                position = 800;
+            }
+
+            face.style.left = position + 'px';
+            animationId = requestAnimationFrame(update);
+        }
+
+        function startGame() {
+            if (isPlaying) return;
+            
+            isPlaying = true;
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            messageDisplay.textContent = "가이드 이미지에 겹쳤을 때 멈추세요!";
+            messageDisplay.style.color = "#333";
+            
+            update();
+        }
+
+        function stopGame() {
+            if (!isPlaying) return;
+
+            cancelAnimationFrame(animationId);
+            isPlaying = false;
+            
+            const offset = Math.abs(position - targetX);
+            const tolerance = 20; // 판정 범위 (20px)
+
+            if (offset <= tolerance) {
+                score += 10;
+                speed += 0.5; // 성공 시 조금씩 빨라짐
+                scoreDisplay.textContent = score;
+                messageDisplay.textContent = "완벽합니다! +10점";
+                messageDisplay.style.color = "#4CAF50";
+                
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('faceGameHighScore', highScore);
+                    highScoreDisplay.textContent = highScore;
+                }
+                
+                setTimeout(() => {
+                    position = 800;
+                    startGame();
+                }, 800);
+
+            } else {
+                messageDisplay.textContent = "아쉬워요! 다시 도전하세요.";
+                messageDisplay.style.color = "#f44336";
+                score = 0;
+                speed = initialSpeed;
+                scoreDisplay.textContent = score;
+                
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                position = 800;
+                face.style.left = position + 'px';
+            }
+        }
+
+        startBtn.addEventListener('click', startGame);
+        stopBtn.addEventListener('click', stopGame);
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Enter' && !isPlaying) {
+                startGame();
+            } else if (e.code === 'Space') {
+                e.preventDefault(); 
+                if (isPlaying) stopGame();
+            }
+        });
+    </script>
+</body>
+</html>
