@@ -3,29 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>얼굴 타이밍 맞추기 게임 V4</title>
+    <title>얼굴 타이밍 맞추기 게임 V5.0</title>
     <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --primary-color: #333;
+            --success-color: #2ecc71;
+            --fail-color: #e74c3c;
+            --point-color: #f1c40f;
+        }
+
         body {
-            background-color: #f0f0f0;
+            background-color: var(--bg-color);
             margin: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
-            font-family: 'Pretendard', sans-serif;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
             overflow: hidden;
             user-select: none;
             -webkit-user-select: none;
+            touch-action: manipulation;
         }
 
+        /* 상단 UI 레이아웃 */
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .score-container {
+            display: flex;
+            gap: 40px;
+            background: white;
+            padding: 15px 40px;
+            border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+        .value { font-size: 28px; font-weight: 800; color: var(--primary-color); }
+
+        /* 게임 필드 */
         #game-container {
             position: relative;
             width: 100%;
-            max-width: 800px;
-            height: 400px;
+            max-width: 900px;
+            height: 450px;
             background-color: transparent;
-            border-bottom: 2px solid #ddd;
             display: flex;
             align-items: center; 
             justify-content: center;
@@ -33,21 +65,18 @@
             cursor: pointer;
         }
 
-        .scoreboard {
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        .score-box {
-            font-size: 28px;
-            font-weight: bold;
-            color: #333;
-        }
-        .high-score {
-            font-size: 16px;
-            color: #666;
-            margin-top: 5px;
+        /* 하단 가로 가이드 라인 */
+        .track-line {
+            position: absolute;
+            width: 90%;
+            height: 2px;
+            background: linear-gradient(to right, transparent, #ddd, transparent);
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 0;
         }
 
+        /* 가이드 이미지 (130px) */
         #target-guide {
             position: absolute;
             width: 130px;
@@ -58,9 +87,11 @@
             background-position: center;
             z-index: 1;
             pointer-events: none;
-            opacity: 0.7;
+            filter: grayscale(1) opacity(0.3);
+            transition: filter 0.3s;
         }
 
+        /* 얼굴 이미지 (120px) */
         #face {
             position: absolute;
             width: 120px;
@@ -72,59 +103,84 @@
             background-color: transparent;
             left: 100%; 
             z-index: 2;
-            transition: transform 0.6s ease-out, opacity 0.6s ease-out; /* 효과용 트랜지션 */
+            transition: transform 0.6s cubic-bezier(0.165, 0.84, 0.44, 1), opacity 0.5s ease-out;
+            will-change: left, transform, opacity;
         }
 
-        /* 성공 시 적용될 애니메이션 클래스 */
+        /* 성공 시 확대+투명 애니메이션 */
         #face.success-effect {
-            transform: scale(2.5); /* 얼굴이 커짐 */
-            opacity: 0;           /* 투명해짐 */
+            transform: scale(3) rotate(15deg);
+            opacity: 0;
+        }
+
+        /* 하단 메시지 영역 */
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            min-height: 80px;
         }
 
         #message {
-            margin-top: 30px;
-            font-size: 20px;
-            font-weight: bold;
-            height: 30px;
-            text-align: center;
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            transition: all 0.2s;
         }
 
-        .sub-guide {
-            margin-top: 10px;
-            color: #888;
+        .hint {
+            color: #aaa;
             font-size: 14px;
+        }
+
+        /* 정확도 등급 표시 애니메이션 */
+        @keyframes popUp {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
         }
     </style>
 </head>
 <body>
 
-    <div class="scoreboard">
-        <div class="score-box">Score: <span id="current-score">0</span></div>
-        <div class="high-score">High Score: <span id="high-score">0</span></div>
+    <div class="header">
+        <div class="score-container">
+            <div class="stat-item">
+                <span class="label">SCORE</span>
+                <span id="current-score" class="value">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="label">HIGH SCORE</span>
+                <span id="high-score" class="value">0</span>
+            </div>
+        </div>
     </div>
 
     <div id="game-container">
+        <div class="track-line"></div>
         <div id="target-guide"></div>
         <div id="face"></div>
     </div>
 
-    <div id="message">화면을 터치하여 시작하세요!</div>
-    <div class="sub-guide">(마우스 클릭 또는 스페이스바도 가능합니다)</div>
+    <div class="footer">
+        <div id="message">화면을 눌러서 시작!</div>
+        <div id="sub-message" class="hint">정중앙에 맞출수록 높은 점수를 얻습니다.</div>
+    </div>
 
     <script>
         const face = document.getElementById('face');
+        const guide = document.getElementById('target-guide');
         const container = document.getElementById('game-container');
         const scoreDisplay = document.getElementById('current-score');
         const highScoreDisplay = document.getElementById('high-score');
         const messageDisplay = document.getElementById('message');
+        const subMessageDisplay = document.getElementById('sub-message');
 
         let score = 0;
-        let highScore = localStorage.getItem('faceGameHighScore') || 0;
+        let highScore = localStorage.getItem('faceGameHighScoreV5') || 0;
         
-        const initialSpeed = 2.6; 
+        const initialSpeed = 2.0; // V5 기준 시작 속도
         let speed = initialSpeed;
-        
-        let position = 800;
+        let position = 0;
         let isPlaying = false;
         let canInput = true; 
         let animationId;
@@ -138,6 +194,7 @@
 
             position -= speed;
             
+            // 화면 왼쪽 끝 도달 시 오른쪽에서 재출현
             if (position < -face.offsetWidth) {
                 position = container.offsetWidth;
             }
@@ -148,7 +205,6 @@
 
         function handleAction() {
             if (!canInput) return;
-
             if (!isPlaying) {
                 startRound();
             } else {
@@ -157,18 +213,20 @@
         }
 
         function startRound() {
-            // 효과 클래스 제거 및 상태 초기화
+            // 시각 효과 초기화
             face.classList.remove('success-effect');
             face.style.opacity = '1';
-            face.style.transform = 'scale(1)';
+            face.style.transform = 'scale(1) rotate(0deg)';
+            guide.style.filter = 'grayscale(0) opacity(0.6)';
             
-            if (position <= -face.offsetWidth || position >= container.offsetWidth - 10) {
-                position = container.offsetWidth;
-            }
+            // 위치 초기화 (오른쪽 밖에서 시작)
+            position = container.offsetWidth;
+            face.style.left = position + 'px';
             
             isPlaying = true;
-            messageDisplay.textContent = "지금이야! 멈춰!!";
+            messageDisplay.textContent = "집중하세요...";
             messageDisplay.style.color = "#333";
+            subMessageDisplay.textContent = "타이밍에 맞춰 클릭!";
             update();
         }
 
@@ -179,52 +237,70 @@
             
             const targetX = getTargetX();
             const offset = Math.abs(position - targetX);
-            const tolerance = 25; 
+            
+            // 정확도 등급 판정
+            let earnedScore = 0;
+            let resultText = "";
+            let textColor = "";
 
-            if (offset <= tolerance) {
-                // 성공 판정
-                score += 10;
-                speed += 0.6;
+            if (offset <= 8) {
+                earnedScore = 50;
+                resultText = "PERFECT!!! 🌟";
+                textColor = "#f1c40f";
+            } else if (offset <= 20) {
+                earnedScore = 20;
+                resultText = "GREAT! 👍";
+                textColor = "#2ecc71";
+            } else if (offset <= 35) {
+                earnedScore = 10;
+                resultText = "GOOD :)";
+                textColor = "#3498db";
+            } else {
+                earnedScore = 0; // 실패
+            }
+
+            if (earnedScore > 0) {
+                // 성공 시
+                score += earnedScore;
+                speed += 0.45; // 속도 증가폭 조정
                 scoreDisplay.textContent = score;
-                messageDisplay.textContent = "Great! 🎯";
-                messageDisplay.style.color = "#4CAF50";
-
-                // [핵심] 성공 효과 적용
+                messageDisplay.textContent = resultText;
+                messageDisplay.style.color = textColor;
+                
+                // 성공 이펙트
                 face.classList.add('success-effect');
+                guide.style.filter = 'grayscale(0) opacity(1)';
                 
                 if (score > highScore) {
                     highScore = score;
-                    localStorage.setItem('faceGameHighScore', highScore);
+                    localStorage.setItem('faceGameHighScoreV5', highScore);
                     highScoreDisplay.textContent = highScore;
                 }
                 
-                // 효과가 끝난 뒤 다음 라운드 준비
                 setTimeout(() => {
-                    face.classList.remove('success-effect');
-                    face.style.opacity = '1';
-                    face.style.transform = 'scale(1)';
-                    position = container.offsetWidth;
-                    face.style.left = position + 'px';
-                    
                     canInput = true;
-                    startRound(); // 자동 다음 라운드 시작
-                }, 700);
+                    startRound();
+                }, 800);
 
             } else {
-                // 실패 판정
-                messageDisplay.textContent = "실패! 다시 도전하려면 화면 클릭!";
-                messageDisplay.style.color = "#f44336";
+                // 완전히 실패했을 때
+                messageDisplay.textContent = "MISS! 😢";
+                messageDisplay.style.color = "#e74c3c";
+                subMessageDisplay.textContent = "다시 도전하려면 클릭하세요.";
                 score = 0;
                 speed = initialSpeed;
                 scoreDisplay.textContent = score;
+                guide.style.filter = 'grayscale(1) opacity(0.1)';
                 canInput = true;
             }
         }
 
+        // 전체 화면 조작 이벤트
         window.addEventListener('pointerdown', (e) => {
             handleAction();
         });
 
+        // 키보드 조작
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space' || e.code === 'Enter') {
                 e.preventDefault();
@@ -232,6 +308,7 @@
             }
         });
 
+        // 화면 크기 대응
         window.addEventListener('resize', () => {
             if (!isPlaying) {
                 position = container.offsetWidth;
