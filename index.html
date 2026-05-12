@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>유준이 얼굴 맞추기 V5.3</title>
+    <title>유준이 얼굴 맞추기 V5.5</title>
     <style>
         :root {
             --bg-color: #f8f9fa;
@@ -55,17 +55,14 @@
             cursor: pointer;
         }
 
-        /* 가이드 (face_image_bg1.png / face_image_bg2.png) */
         #target-guide {
             position: absolute; width: 130px; height: 130px;
             background-size: contain;
             background-repeat: no-repeat;
             background-position: center;
             z-index: 1; opacity: 0.3;
-            transition: background-image 0.2s ease-in;
         }
 
-        /* 얼굴 (face_image1.png / face_image2.png) */
         #face {
             position: absolute; width: 120px; height: 120px;
             background-size: contain;
@@ -91,7 +88,7 @@
 </head>
 <body>
 
-    <div class="version-tag">유준이 얼굴 맞추기 버젼 5.3</div>
+    <div class="version-tag">유준이 얼굴 맞추기 버젼 5.5</div>
 
     <div class="header">
         <div class="score-container">
@@ -112,8 +109,8 @@
     </div>
 
     <div class="footer">
-        <div id="message">터치해서 시작!</div>
-        <div id="sub-message" class="hint">이미지가 매번 바뀝니다!</div>
+        <div id="message">터치해서 음악과 함께 시작!</div>
+        <div id="sub-message" class="hint">BGM: bg_sound.mp3</div>
     </div>
 
     <script>
@@ -124,6 +121,10 @@
         const highScoreDisplay = document.getElementById('high-score');
         const messageDisplay = document.getElementById('message');
 
+        // 오디오 객체 생성 (파일명: bg_sound.mp3)
+        const bgm = new Audio('bg_sound.mp3');
+        bgm.loop = true;
+
         let score = 0;
         let highScore = localStorage.getItem('faceGameHighScoreV5') || 0;
         const initialSpeed = 2.2; 
@@ -132,22 +133,16 @@
         let isPlaying = false;
         let canInput = true; 
         let animationId;
-
-        // 이미지 세트 관리 (1 또는 2)
         let currentImageIndex = 1;
 
         highScoreDisplay.textContent = highScore;
 
-        // 이미지 교체 함수
         function updateImages() {
-            // 1과 2를 번갈아 가며 선택 (원한다면 Math.random()으로 완전 랜덤 가능)
             currentImageIndex = (currentImageIndex === 1) ? 2 : 1;
-            
             guide.style.backgroundImage = `url('face_image_bg${currentImageIndex}.png')`;
             face.style.backgroundImage = `url('face_image${currentImageIndex}.png')`;
         }
 
-        // 초기 이미지 설정
         updateImages();
 
         function update() {
@@ -160,6 +155,12 @@
 
         function handleAction() {
             if (!canInput) return;
+            
+            // 첫 터치 시 배경음악 재생
+            if (bgm.paused) {
+                bgm.play().catch(e => console.log("오디오 재생 실패:", e));
+            }
+
             if (!isPlaying) startRound();
             else stopRound();
         }
@@ -167,8 +168,6 @@
         function startRound() {
             face.classList.remove('success-animate');
             face.style.opacity = '1';
-            
-            // 라운드 시작 시 이미지 변경
             updateImages();
             
             position = container.offsetWidth;
@@ -176,7 +175,7 @@
             
             isPlaying = true;
             canInput = true;
-            messageDisplay.textContent = "맞춰보세요!";
+            messageDisplay.textContent = "가즈아~! 멈춰!!";
             messageDisplay.style.color = "#333";
             update();
         }
@@ -190,14 +189,12 @@
             const offset = Math.abs(position - targetX);
             
             if (offset <= 35) {
-                // 성공 판정
                 const isPerfect = offset <= 10;
                 score += (isPerfect ? 50 : 20);
                 speed += 0.5;
                 scoreDisplay.textContent = score;
                 messageDisplay.textContent = isPerfect ? "PERFECT! ✨" : "GREAT! 👍";
                 messageDisplay.style.color = "#2ecc71";
-
                 face.classList.add('success-animate');
 
                 if (score > highScore) {
@@ -208,12 +205,13 @@
                 
                 setTimeout(startRound, 800);
             } else {
-                // 실패
-                messageDisplay.textContent = "MISS! 😢";
+                messageDisplay.textContent = "아이구! MISS 😢";
                 messageDisplay.style.color = "#e74c3c";
                 score = 0;
                 speed = initialSpeed;
                 scoreDisplay.textContent = score;
+                
+                // 실패해도 음악은 끄지 않고 계속 유지합니다.
                 canInput = true;
             }
         }
