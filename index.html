@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>유준이 얼굴 맞추기 V5.5</title>
+    <title>유준이 얼굴 맞추기 V5.6 (175 BPM)</title>
     <style>
         :root {
             --bg-color: #f8f9fa;
@@ -14,27 +14,16 @@
 
         body {
             background-color: var(--bg-color);
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            font-family: 'Pretendard', sans-serif;
-            overflow: hidden;
-            user-select: none;
-            -webkit-user-select: none;
+            margin: 0; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            height: 100vh; font-family: 'Pretendard', sans-serif;
+            overflow: hidden; user-select: none; -webkit-user-select: none;
             touch-action: manipulation;
         }
 
         .version-tag {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            font-size: 14px;
-            color: #ccc;
-            font-weight: 500;
-            z-index: 10;
+            position: absolute; top: 20px; left: 20px;
+            font-size: 14px; color: #ccc; font-weight: 500; z-index: 10;
         }
 
         .header { text-align: center; margin-bottom: 30px; }
@@ -51,25 +40,20 @@
             position: relative;
             width: 100%; max-width: 900px; height: 400px;
             display: flex; align-items: center; justify-content: center;
-            overflow: visible;
-            cursor: pointer;
+            overflow: visible; cursor: pointer;
         }
 
         #target-guide {
             position: absolute; width: 130px; height: 130px;
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
-            z-index: 1; opacity: 0.3;
+            background-size: contain; background-repeat: no-repeat;
+            background-position: center; z-index: 1; opacity: 0.3;
         }
 
-        #face {
+        .face-particle {
             position: absolute; width: 120px; height: 120px;
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
-            left: 100%; z-index: 5;
-            transform: scale(1);
+            background-size: contain; background-repeat: no-repeat;
+            background-position: center; left: 100%; z-index: 5;
+            will-change: left, transform, opacity;
         }
 
         @keyframes successZoom {
@@ -78,7 +62,7 @@
         }
 
         .success-animate {
-            animation: successZoom 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards !important;
+            animation: successZoom 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards !important;
         }
 
         .footer { margin-top: 40px; text-align: center; min-height: 80px; }
@@ -88,7 +72,7 @@
 </head>
 <body>
 
-    <div class="version-tag">유준이 얼굴 맞추기 버젼 5.5</div>
+    <div class="version-tag">유준이 얼굴 맞추기 버젼 5.6 (175 BPM)</div>
 
     <div class="header">
         <div class="score-container">
@@ -105,115 +89,164 @@
 
     <div id="game-container">
         <div id="target-guide"></div>
-        <div id="face"></div>
+        <!-- 얼굴들이 동적으로 생성됩니다 -->
     </div>
 
     <div class="footer">
-        <div id="message">터치해서 음악과 함께 시작!</div>
-        <div id="sub-message" class="hint">BGM: bg_sound.mp3</div>
+        <div id="message">터치해서 175 BPM 비트에 맞춰 시작!</div>
+        <div id="sub-message" class="hint">연속해서 튀어나오는 얼굴을 맞춰보세요.</div>
     </div>
 
     <script>
-        const face = document.getElementById('face');
-        const guide = document.getElementById('target-guide');
         const container = document.getElementById('game-container');
+        const guide = document.getElementById('target-guide');
         const scoreDisplay = document.getElementById('current-score');
         const highScoreDisplay = document.getElementById('high-score');
         const messageDisplay = document.getElementById('message');
 
-        // 오디오 객체 생성 (파일명: bg_sound.mp3)
         const bgm = new Audio('bg_sound.mp3');
         bgm.loop = true;
 
         let score = 0;
         let highScore = localStorage.getItem('faceGameHighScoreV5') || 0;
-        const initialSpeed = 2.2; 
-        let speed = initialSpeed;
-        let position = 0;
-        let isPlaying = false;
-        let canInput = true; 
-        let animationId;
-        let currentImageIndex = 1;
-
         highScoreDisplay.textContent = highScore;
 
-        function updateImages() {
+        // BPM 설정 (175 BPM)
+        const bpm = 175;
+        const beatInterval = (60 / bpm) * 1000; // 1박자당 약 342.8ms
+        
+        let isPlaying = false;
+        let currentImageIndex = 1;
+        let activeFaces = [];
+        let spawnTimer;
+
+        function updateGuideImage() {
             currentImageIndex = (currentImageIndex === 1) ? 2 : 1;
             guide.style.backgroundImage = `url('face_image_bg${currentImageIndex}.png')`;
-            face.style.backgroundImage = `url('face_image${currentImageIndex}.png')`;
         }
 
-        updateImages();
-
-        function update() {
+        function createFace() {
             if (!isPlaying) return;
-            position -= speed;
-            if (position < -120) position = container.offsetWidth;
-            face.style.left = position + 'px';
-            animationId = requestAnimationFrame(update);
+
+            const face = document.createElement('div');
+            face.className = 'face-particle';
+            const imgIdx = (Math.random() > 0.5) ? 1 : 2;
+            face.style.backgroundImage = `url('face_image${imgIdx}.png')`;
+            
+            const startPos = container.offsetWidth;
+            const targetPos = (container.offsetWidth / 2) - 60;
+            
+            // 데이터 저장
+            const faceObj = {
+                el: face,
+                pos: startPos,
+                target: targetPos,
+                startTime: performance.now(),
+                // 2박자(약 0.68초) 만에 타겟에 도달하도록 설정 (BPM 체감 최적화)
+                duration: beatInterval * 2, 
+                hit: false
+            };
+
+            container.appendChild(face);
+            activeFaces.push(faceObj);
+
+            // 다음 비트에 맞춰 생성
+            spawnTimer = setTimeout(createFace, beatInterval);
+        }
+
+        function animate() {
+            if (!isPlaying) return;
+            const now = performance.now();
+
+            activeFaces.forEach((faceObj, index) => {
+                if (faceObj.hit) return;
+
+                const elapsed = now - faceObj.startTime;
+                const progress = elapsed / faceObj.duration;
+                
+                // 위치 계산 (오른쪽 끝 100% -> 왼쪽 끝 0%)
+                const currentPos = container.offsetWidth - (container.offsetWidth * progress * 0.8);
+                faceObj.pos = currentPos;
+                faceObj.el.style.left = currentPos + 'px';
+
+                // 화면 밖으로 나가면 제거
+                if (currentPos < -120) {
+                    faceObj.el.remove();
+                    activeFaces.splice(index, 1);
+                    if (!faceObj.hit && score > 0) { // 놓치면 콤보 리셋
+                        resetGame();
+                    }
+                }
+            });
+
+            requestAnimationFrame(animate);
         }
 
         function handleAction() {
-            if (!canInput) return;
-            
-            // 첫 터치 시 배경음악 재생
-            if (bgm.paused) {
-                bgm.play().catch(e => console.log("오디오 재생 실패:", e));
+            if (bgm.paused) bgm.play();
+
+            if (!isPlaying) {
+                isPlaying = true;
+                score = 0;
+                scoreDisplay.textContent = score;
+                messageDisplay.textContent = "비트 타는 중...!!";
+                updateGuideImage();
+                createFace();
+                animate();
+                return;
             }
 
-            if (!isPlaying) startRound();
-            else stopRound();
-        }
+            // 가장 타겟에 가까운 얼굴 찾기
+            if (activeFaces.length === 0) return;
 
-        function startRound() {
-            face.classList.remove('success-animate');
-            face.style.opacity = '1';
-            updateImages();
-            
-            position = container.offsetWidth;
-            face.style.left = position + 'px';
-            
-            isPlaying = true;
-            canInput = true;
-            messageDisplay.textContent = "가즈아~! 멈춰!!";
-            messageDisplay.style.color = "#333";
-            update();
-        }
-
-        function stopRound() {
-            isPlaying = false;
-            canInput = false;
-            cancelAnimationFrame(animationId);
-            
             const targetX = (container.offsetWidth / 2) - 60;
-            const offset = Math.abs(position - targetX);
-            
-            if (offset <= 35) {
-                const isPerfect = offset <= 10;
-                score += (isPerfect ? 50 : 20);
-                speed += 0.5;
-                scoreDisplay.textContent = score;
-                messageDisplay.textContent = isPerfect ? "PERFECT! ✨" : "GREAT! 👍";
-                messageDisplay.style.color = "#2ecc71";
-                face.classList.add('success-animate');
+            let closestFace = activeFaces[0];
+            let minOffset = Math.abs(closestFace.pos - targetX);
 
+            activeFaces.forEach(f => {
+                const off = Math.abs(f.pos - targetX);
+                if (off < minOffset) {
+                    minOffset = off;
+                    closestFace = f;
+                }
+            });
+
+            if (minOffset <= 45 && !closestFace.hit) {
+                const isPerfect = minOffset <= 15;
+                score += (isPerfect ? 50 : 20);
+                scoreDisplay.textContent = score;
+                messageDisplay.textContent = isPerfect ? "PERFECT! 🔥" : "GREAT! 👍";
+                messageDisplay.style.color = "#2ecc71";
+
+                closestFace.hit = true;
+                closestFace.el.classList.add('success-animate');
+                
                 if (score > highScore) {
                     highScore = score;
                     localStorage.setItem('faceGameHighScoreV5', highScore);
                     highScoreDisplay.textContent = highScore;
                 }
+
+                setTimeout(() => {
+                    closestFace.el.remove();
+                    activeFaces = activeFaces.filter(f => f !== closestFace);
+                }, 400);
                 
-                setTimeout(startRound, 800);
+                updateGuideImage();
             } else {
-                messageDisplay.textContent = "아이구! MISS 😢";
-                messageDisplay.style.color = "#e74c3c";
-                score = 0;
-                speed = initialSpeed;
-                scoreDisplay.textContent = score;
-                
-                // 실패해도 음악은 끄지 않고 계속 유지합니다.
-                canInput = true;
+                resetGame();
             }
+        }
+
+        function resetGame() {
+            messageDisplay.textContent = "비트를 놓쳤어요! 😢";
+            messageDisplay.style.color = "#e74c3c";
+            isPlaying = false;
+            clearTimeout(spawnTimer);
+            activeFaces.forEach(f => f.el.remove());
+            activeFaces = [];
+            score = 0;
+            scoreDisplay.textContent = score;
         }
 
         window.addEventListener('pointerdown', (e) => {
