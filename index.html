@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>유준이 얼굴 맞추기 V5.2</title>
+    <title>유준이 얼굴 맞추기 V5.3</title>
     <style>
         :root {
             --bg-color: #f8f9fa;
             --primary-color: #333;
             --success-color: #2ecc71;
             --fail-color: #e74c3c;
-            --point-color: #f1c40f;
         }
 
         body {
@@ -52,27 +51,33 @@
             position: relative;
             width: 100%; max-width: 900px; height: 400px;
             display: flex; align-items: center; justify-content: center;
-            overflow: visible; /* 커질 때 잘리지 않도록 변경 */
+            overflow: visible;
             cursor: pointer;
         }
 
+        /* 가이드 (face_image_bg1.png / face_image_bg2.png) */
         #target-guide {
             position: absolute; width: 130px; height: 130px;
-            background: url('face_image_bg.png') no-repeat center/contain;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
             z-index: 1; opacity: 0.3;
+            transition: background-image 0.2s ease-in;
         }
 
+        /* 얼굴 (face_image1.png / face_image2.png) */
         #face {
             position: absolute; width: 120px; height: 120px;
-            background: url('face_image.png') no-repeat center/contain;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
             left: 100%; z-index: 5;
             transform: scale(1);
         }
 
-        /* [핵심] 성공 시 강제 애니메이션 효과 */
         @keyframes successZoom {
             0% { transform: scale(1) rotate(0deg); opacity: 1; }
-            100% { transform: scale(4) rotate(20deg); opacity: 0; }
+            100% { transform: scale(4) rotate(25deg); opacity: 0; }
         }
 
         .success-animate {
@@ -86,7 +91,7 @@
 </head>
 <body>
 
-    <div class="version-tag">유준이 얼굴 맞추기 버젼 5.2</div>
+    <div class="version-tag">유준이 얼굴 맞추기 버젼 5.3</div>
 
     <div class="header">
         <div class="score-container">
@@ -108,7 +113,7 @@
 
     <div class="footer">
         <div id="message">터치해서 시작!</div>
-        <div id="sub-message" class="hint">정중앙에 맞춰보세요.</div>
+        <div id="sub-message" class="hint">이미지가 매번 바뀝니다!</div>
     </div>
 
     <script>
@@ -128,7 +133,22 @@
         let canInput = true; 
         let animationId;
 
+        // 이미지 세트 관리 (1 또는 2)
+        let currentImageIndex = 1;
+
         highScoreDisplay.textContent = highScore;
+
+        // 이미지 교체 함수
+        function updateImages() {
+            // 1과 2를 번갈아 가며 선택 (원한다면 Math.random()으로 완전 랜덤 가능)
+            currentImageIndex = (currentImageIndex === 1) ? 2 : 1;
+            
+            guide.style.backgroundImage = `url('face_image_bg${currentImageIndex}.png')`;
+            face.style.backgroundImage = `url('face_image${currentImageIndex}.png')`;
+        }
+
+        // 초기 이미지 설정
+        updateImages();
 
         function update() {
             if (!isPlaying) return;
@@ -145,15 +165,18 @@
         }
 
         function startRound() {
-            // 모든 효과 리셋
             face.classList.remove('success-animate');
             face.style.opacity = '1';
-            face.style.left = container.offsetWidth + 'px';
+            
+            // 라운드 시작 시 이미지 변경
+            updateImages();
+            
             position = container.offsetWidth;
+            face.style.left = position + 'px';
             
             isPlaying = true;
             canInput = true;
-            messageDisplay.textContent = "오는 중...";
+            messageDisplay.textContent = "맞춰보세요!";
             messageDisplay.style.color = "#333";
             update();
         }
@@ -168,13 +191,13 @@
             
             if (offset <= 35) {
                 // 성공 판정
-                score += (offset <= 10 ? 50 : 20);
+                const isPerfect = offset <= 10;
+                score += (isPerfect ? 50 : 20);
                 speed += 0.5;
                 scoreDisplay.textContent = score;
-                messageDisplay.textContent = offset <= 10 ? "PERFECT! ✨" : "GREAT! 👍";
+                messageDisplay.textContent = isPerfect ? "PERFECT! ✨" : "GREAT! 👍";
                 messageDisplay.style.color = "#2ecc71";
 
-                // [효과 실행] CSS 애니메이션 클래스 주입
                 face.classList.add('success-animate');
 
                 if (score > highScore) {
@@ -183,7 +206,6 @@
                     highScoreDisplay.textContent = highScore;
                 }
                 
-                // 애니메이션이 완전히 끝난 후 다음 라운드
                 setTimeout(startRound, 800);
             } else {
                 // 실패
