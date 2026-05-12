@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>유준이 얼굴 맞추기 V5.7 (175 BPM - Full Song)</title>
+    <title>유준이 얼굴 맞추기 V5.8 (Impact Update)</title>
     <style>
         :root {
             --bg-color: #f8f9fa;
             --primary-color: #333;
             --success-color: #2ecc71;
             --fail-color: #e74c3c;
-            --point-color: #f1c40f;
         }
 
         body {
@@ -27,14 +26,12 @@
             font-size: 14px; color: #ccc; font-weight: 500; z-index: 10;
         }
 
-        /* 시간 진행 바 */
         #timer-container {
             position: fixed; top: 0; left: 0; width: 100%; height: 6px;
             background: #eee; z-index: 100;
         }
         #timer-bar {
             width: 0%; height: 100%; background: var(--success-color);
-            transition: width 0.1s linear;
         }
 
         .header { text-align: center; margin-bottom: 20px; }
@@ -67,24 +64,35 @@
             will-change: left, transform, opacity;
         }
 
+        /* [성공] 커지면서 사라짐 */
         @keyframes successZoom {
             0% { transform: scale(1) rotate(0deg); opacity: 1; }
             100% { transform: scale(4) rotate(25deg); opacity: 0; }
+        }
+
+        /* [실패] 작아지면서 사라짐 */
+        @keyframes failShrink {
+            0% { transform: scale(1) rotate(0deg); opacity: 1; }
+            100% { transform: scale(0.1) rotate(-45deg); opacity: 0; }
         }
 
         .success-animate {
             animation: successZoom 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards !important;
         }
 
+        .fail-animate {
+            animation: failShrink 0.5s ease-in forwards !important;
+        }
+
         .footer { margin-top: 40px; text-align: center; min-height: 80px; }
-        #message { font-size: 26px; font-weight: 800; margin-bottom: 8px; }
+        #message { font-size: 26px; font-weight: 800; margin-bottom: 8px; transition: color 0.2s; }
         .hint { color: #aaa; font-size: 14px; }
     </style>
 </head>
 <body>
 
     <div id="timer-container"><div id="timer-bar"></div></div>
-    <div class="version-tag">유준이 얼굴 맞추기 버젼 5.7 (Full Song)</div>
+    <div class="version-tag">유준이 얼굴 맞추기 버젼 5.8 (Impact Update)</div>
 
     <div class="header">
         <div class="score-container">
@@ -104,8 +112,8 @@
     </div>
 
     <div class="footer">
-        <div id="message">화면을 눌러서 노래 시작!</div>
-        <div id="sub-message" class="hint">음악이 끝날 때까지 최대한 많은 점수를 얻으세요!</div>
+        <div id="message">터치해서 게임 시작!</div>
+        <div id="sub-message" class="hint">놓치면 얼굴이 쪼그라들어요!</div>
     </div>
 
     <script>
@@ -117,7 +125,7 @@
         const timerBar = document.getElementById('timer-bar');
 
         const bgm = new Audio('bg_sound.mp3');
-        bgm.loop = false; // 음악이 끝나면 게임을 종료해야 하므로 loop는 false
+        bgm.loop = false;
 
         let score = 0;
         let highScore = localStorage.getItem('faceGameHighScoreV5') || 0;
@@ -128,27 +136,15 @@
         
         let isPlaying = false;
         let isGameOver = false;
-        let currentImageIndex = 1;
         let activeFaces = [];
         let spawnTimer;
 
-        // 음악 종료 시 이벤트 리스너
-        bgm.addEventListener('ended', () => {
-            gameOver();
-        });
-
-        // 진행 바 업데이트
+        bgm.addEventListener('ended', () => gameOver());
         bgm.addEventListener('timeupdate', () => {
             if (bgm.duration) {
-                const progress = (bgm.currentTime / bgm.duration) * 100;
-                timerBar.style.width = progress + '%';
+                timerBar.style.width = (bgm.currentTime / bgm.duration) * 100 + '%';
             }
         });
-
-        function updateGuideImage() {
-            currentImageIndex = (currentImageIndex === 1) ? 2 : 1;
-            guide.style.backgroundImage = `url('face_image_bg${currentImageIndex}.png')`;
-        }
 
         function createFace() {
             if (!isPlaying || isGameOver) return;
@@ -158,20 +154,16 @@
             const imgIdx = (Math.random() > 0.5) ? 1 : 2;
             face.style.backgroundImage = `url('face_image${imgIdx}.png')`;
             
-            const startPos = container.offsetWidth;
-            const targetPos = (container.offsetWidth / 2) - 60;
-            
             const faceObj = {
                 el: face,
-                pos: startPos,
+                pos: container.offsetWidth,
                 startTime: performance.now(),
-                duration: beatInterval * 2, 
-                hit: false
+                duration: beatInterval * 2,
+                processed: false // 판정 완료 여부
             };
 
             container.appendChild(face);
             activeFaces.push(faceObj);
-
             spawnTimer = setTimeout(createFace, beatInterval);
         }
 
@@ -180,7 +172,7 @@
             const now = performance.now();
 
             activeFaces.forEach((faceObj, index) => {
-                if (faceObj.hit) return;
+                if (faceObj.processed) return;
 
                 const elapsed = now - faceObj.startTime;
                 const progress = elapsed / faceObj.duration;
@@ -189,9 +181,10 @@
                 faceObj.pos = currentPos;
                 faceObj.el.style.left = currentPos + 'px';
 
-                if (currentPos < -120) {
-                    faceObj.el.remove();
-                    activeFaces.splice(index, 1);
+                // 타겟 라인을 한참 지나치면 자동으로 실패 처리 (작아짐)
+                const targetX = (container.offsetWidth / 2) - 60;
+                if (currentPos < targetX - 100) {
+                    triggerFail(faceObj);
                 }
             });
 
@@ -199,47 +192,36 @@
         }
 
         function handleAction() {
-            if (isGameOver) {
-                location.reload(); // 게임 오버 후 클릭하면 재시작
-                return;
-            }
+            if (isGameOver) { location.reload(); return; }
 
             if (!isPlaying) {
                 isPlaying = true;
-                bgm.play().catch(e => console.log("재생 오류:", e));
-                score = 0;
-                scoreDisplay.textContent = score;
-                messageDisplay.textContent = "음악 종료까지 가즈아!!";
-                updateGuideImage();
+                bgm.play();
                 createFace();
                 animate();
                 return;
             }
-
-            if (activeFaces.length === 0) return;
 
             const targetX = (container.offsetWidth / 2) - 60;
             let closestFace = null;
             let minOffset = 999;
 
             activeFaces.forEach(f => {
-                if (!f.hit) {
+                if (!f.processed) {
                     const off = Math.abs(f.pos - targetX);
-                    if (off < minOffset) {
-                        minOffset = off;
-                        closestFace = f;
-                    }
+                    if (off < minOffset) { minOffset = off; closestFace = f; }
                 }
             });
 
-            if (closestFace && minOffset <= 50) {
+            // 판정 범위 내에 있을 때 터치한 경우
+            if (closestFace && minOffset <= 60) {
                 const isPerfect = minOffset <= 15;
                 score += (isPerfect ? 50 : 20);
                 scoreDisplay.textContent = score;
                 messageDisplay.textContent = isPerfect ? "PERFECT! 🔥" : "GREAT! 👍";
-                messageDisplay.style.color = isPerfect ? "#f1c40f" : "#2ecc71";
-
-                closestFace.hit = true;
+                messageDisplay.style.color = "#2ecc71";
+                
+                closestFace.processed = true;
                 closestFace.el.classList.add('success-animate');
                 
                 if (score > highScore) {
@@ -247,40 +229,41 @@
                     localStorage.setItem('faceGameHighScoreV5', highScore);
                     highScoreDisplay.textContent = highScore;
                 }
-
-                setTimeout(() => {
-                    closestFace.el.remove();
-                    activeFaces = activeFaces.filter(f => f !== closestFace);
-                }, 400);
-                
-                updateGuideImage();
+                clearFace(closestFace);
+            } else {
+                // 엉뚱한 데서 누르면 현재 가장 가까운 얼굴을 강제로 실패 처리
+                if (closestFace) triggerFail(closestFace);
             }
+        }
+
+        function triggerFail(faceObj) {
+            if (faceObj.processed) return;
+            faceObj.processed = true;
+            
+            messageDisplay.textContent = "MISS... 😢";
+            messageDisplay.style.color = "#e74c3c";
+            
+            faceObj.el.classList.add('fail-animate');
+            clearFace(faceObj);
+        }
+
+        function clearFace(faceObj) {
+            setTimeout(() => {
+                faceObj.el.remove();
+                activeFaces = activeFaces.filter(f => f !== faceObj);
+            }, 500);
         }
 
         function gameOver() {
             isGameOver = true;
             isPlaying = false;
             clearTimeout(spawnTimer);
-            
-            // 모든 얼굴 제거
-            activeFaces.forEach(f => f.el.remove());
-            activeFaces = [];
-
-            messageDisplay.innerHTML = `TIME UP! 🏁<br><span style="font-size:40px; color:#333;">최종 점수: ${score}</span>`;
-            messageDisplay.style.color = "#333";
-            document.getElementById('sub-message').textContent = "다시 하려면 화면을 클릭하세요.";
-            timerBar.style.width = '100%';
-            timerBar.style.background = '#333';
+            messageDisplay.innerHTML = `TIME UP! 🏁<br><span style="font-size:40px;">Final Score: ${score}</span>`;
+            document.getElementById('sub-message').textContent = "다시 하려면 클릭하세요.";
         }
 
-        window.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            handleAction();
-        });
-        
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' || e.code === 'Enter') handleAction();
-        });
+        window.addEventListener('pointerdown', (e) => { e.preventDefault(); handleAction(); });
+        window.addEventListener('keydown', (e) => { if (e.code === 'Space' || e.code === 'Enter') handleAction(); });
     </script>
 </body>
 </html>
