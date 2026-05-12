@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>유준이 얼굴 맞추기 V6.0 (Dual Target)</title>
+    <title>유준이 얼굴 맞추기 V6.2 (Full Opacity)</title>
     <style>
         :root {
             --bg-color: #f8f9fa;
@@ -26,10 +26,7 @@
             font-size: 14px; color: #ccc; font-weight: 500; z-index: 10;
         }
 
-        #timer-container {
-            position: fixed; top: 0; left: 0; width: 100%; height: 6px;
-            background: #eee; z-index: 100;
-        }
+        #timer-container { position: fixed; top: 0; left: 0; width: 100%; height: 6px; background: #eee; z-index: 100; }
         #timer-bar { width: 0%; height: 100%; background: var(--success-color); }
 
         .header { text-align: center; margin-bottom: 20px; }
@@ -39,7 +36,7 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.05);
         }
         .stat-item { display: flex; flex-direction: column; }
-        .label { font-size: 12px; color: #888; letter-spacing: 1px; }
+        .label { font-size: 12px; color: #888; }
         .value { font-size: 28px; font-weight: 800; color: var(--primary-color); }
 
         #game-container {
@@ -49,53 +46,62 @@
             overflow: visible; cursor: pointer;
         }
 
-        /* 공통 가이드 스타일 */
+        /* 가이드: 투명도 제거(1), 10px 크게(140px) */
         .guide {
-            position: absolute; width: 140px; height: 140px;
-            background-size: contain; background-repeat: no-repeat;
-            background-position: center; z-index: 1; opacity: 0.25;
+            position: absolute; 
+            width: 140px; height: 140px;
+            background-size: contain; 
+            background-repeat: no-repeat;
+            background-position: center; 
+            z-index: 2;
+            opacity: 1; /* 투명도 없음 */
+            top: 50%;
+            transform: translateY(-50%) translateX(-50%);
         }
 
-        /* 왼쪽 가이드: 중앙과 왼쪽 끝의 중간 (25% 지점) */
         #guide-left {
-            left: 25%; transform: translateX(-50%);
+            left: 25%;
             background-image: url('face_image_bg.png');
         }
 
-        /* 오른쪽 가이드: 중앙과 오른쪽 끝의 중간 (75% 지점) */
         #guide-right {
-            left: 75%; transform: translateX(-50%);
+            left: 75%;
             background-image: url('face_image_bg1.png');
         }
 
         .face-particle {
-            position: absolute; width: 120px; height: 120px;
-            background-size: contain; background-repeat: no-repeat;
-            background-position: center; left: 100%; z-index: 5;
+            position: absolute; 
+            width: 120px; height: 120px;
+            background-size: contain; 
+            background-repeat: no-repeat;
+            background-position: center; 
+            left: 100%; 
+            z-index: 10; /* 가이드보다 위로 지나감 */
             will-change: left, transform, opacity;
+            top: 50%;
+            transform: translateY(-50%);
         }
 
-        @keyframes successZoom {
-            0% { transform: scale(1) rotate(0deg); opacity: 1; }
-            100% { transform: scale(4) rotate(25deg); opacity: 0; }
+        @keyframes successZoom { 
+            0% { transform: translateY(-50%) scale(1); opacity: 1; } 
+            100% { transform: translateY(-50%) scale(4); opacity: 0; } 
         }
-
-        @keyframes failShrink {
-            0% { transform: scale(1) rotate(0deg); opacity: 1; }
-            100% { transform: scale(0.1) rotate(-45deg); opacity: 0; }
+        @keyframes failShrink { 
+            0% { transform: translateY(-50%) scale(1); opacity: 1; } 
+            100% { transform: translateY(-50%) scale(0.1); opacity: 0; } 
         }
 
         .success-animate { animation: successZoom 0.4s forwards !important; }
         .fail-animate { animation: failShrink 0.5s forwards !important; }
 
         .footer { margin-top: 40px; text-align: center; min-height: 80px; }
-        #message { font-size: 26px; font-weight: 800; margin-bottom: 8px; }
+        #message { font-size: 26px; font-weight: 800; }
     </style>
 </head>
 <body>
 
     <div id="timer-container"><div id="timer-bar"></div></div>
-    <div class="version-tag">유준이 얼굴 맞추기 버젼 6.0 (Dual Target)</div>
+    <div class="version-tag">유준이 얼굴 맞추기 V6.2 (Full Opacity)</div>
 
     <div class="header">
         <div class="score-container">
@@ -116,7 +122,7 @@
     </div>
 
     <div class="footer">
-        <div id="message">터치해서 양쪽 타겟을 공략하세요!</div>
+        <div id="message">화면을 터치하여 시작하세요!</div>
     </div>
 
     <script>
@@ -139,10 +145,10 @@
 
         highScoreDisplay.textContent = highScore;
 
-        bgm.addEventListener('ended', () => gameOver());
         bgm.addEventListener('timeupdate', () => {
             if (bgm.duration) timerBar.style.width = (bgm.currentTime / bgm.duration) * 100 + '%';
         });
+        bgm.addEventListener('ended', () => { isGameOver = true; isPlaying = false; messageDisplay.textContent = "GAME OVER!"; });
 
         function createFace() {
             if (!isPlaying || isGameOver) return;
@@ -155,7 +161,7 @@
                 el: face,
                 pos: container.offsetWidth,
                 startTime: performance.now(),
-                duration: beatInterval * 3, // 타겟이 두 개라 조금 더 여유 있게 흐르게 설정
+                duration: beatInterval * 3.5,
                 processed: false
             };
             container.appendChild(face);
@@ -166,76 +172,48 @@
         function animate() {
             if (!isPlaying || isGameOver) return;
             const now = performance.now();
-
-            activeFaces.forEach((faceObj, index) => {
+            activeFaces.forEach((faceObj) => {
                 if (faceObj.processed) return;
                 const progress = (now - faceObj.startTime) / faceObj.duration;
                 const currentPos = container.offsetWidth - (container.offsetWidth * progress);
-                
                 faceObj.pos = currentPos;
                 faceObj.el.style.left = currentPos + 'px';
-
-                // 화면 왼쪽 끝을 완전히 벗어나면 실패 처리
-                if (currentPos < -120) triggerFail(faceObj);
+                if (currentPos < -150) triggerFail(faceObj);
             });
             requestAnimationFrame(animate);
         }
 
         function handleAction() {
             if (isGameOver) { location.reload(); return; }
-            if (!isPlaying) {
-                isPlaying = true;
-                bgm.play();
-                createFace();
-                animate();
-                return;
-            }
+            if (!isPlaying) { isPlaying = true; bgm.play(); createFace(); animate(); return; }
 
             const faceWidth = 120;
-            // 타겟 위치 계산 (px 단위)
-            const leftTargetX = (container.offsetWidth * 0.25) - 70;
-            const rightTargetX = (container.offsetWidth * 0.75) - 70;
+            const leftTargetX = (container.offsetWidth * 0.25) - (faceWidth/2);
+            const rightTargetX = (container.offsetWidth * 0.75) - (faceWidth/2);
             
             let targetFace = null;
-            let currentType = "";
+            let currentTargetX = 0;
 
-            // 가장 적절한 타겟 얼굴 찾기 (왼쪽 혹은 오른쪽 가이드에 겹친 녀석)
             activeFaces.forEach(f => {
                 if (f.processed) return;
-
-                // 오른쪽 가이드 중첩 계산
                 const overlapR = calculateOverlap(f.pos, rightTargetX, faceWidth);
-                if (overlapR >= 0.7) {
-                    targetFace = f;
-                    currentType = "right";
-                }
-
-                // 왼쪽 가이드 중첩 계산 (왼쪽이 더 나중에 오므로 우선순위 높임)
                 const overlapL = calculateOverlap(f.pos, leftTargetX, faceWidth);
-                if (overlapL >= 0.7) {
-                    targetFace = f;
-                    currentType = "left";
-                }
+
+                if (overlapL >= 0.7) { targetFace = f; currentTargetX = leftTargetX; }
+                else if (overlapR >= 0.7) { targetFace = f; currentTargetX = rightTargetX; }
             });
 
             if (targetFace) {
-                const isPerfect = calculateOverlap(targetFace.pos, (currentType === "left" ? leftTargetX : rightTargetX), faceWidth) >= 0.9;
+                const finalOverlap = calculateOverlap(targetFace.pos, currentTargetX, faceWidth);
+                const isPerfect = finalOverlap >= 0.9;
                 score += (isPerfect ? 50 : 20);
                 scoreDisplay.textContent = score;
                 messageDisplay.textContent = isPerfect ? "PERFECT! 🔥" : "GOOD! 👍";
                 messageDisplay.style.color = "#2ecc71";
-                
                 targetFace.processed = true;
                 targetFace.el.classList.add('success-animate');
-                
-                if (score > highScore) {
-                    highScore = score;
-                    localStorage.setItem('faceGameHighScoreV5', highScore);
-                    highScoreDisplay.textContent = highScore;
-                }
                 clearFace(targetFace);
             } else {
-                // 아무것도 안 겹쳤을 때 누르면 가장 앞선 얼굴 실패 처리
                 const frontFace = activeFaces.find(f => !f.processed);
                 if (frontFace) triggerFail(frontFace);
             }
@@ -256,21 +234,10 @@
         }
 
         function clearFace(faceObj) {
-            setTimeout(() => {
-                faceObj.el.remove();
-                activeFaces = activeFaces.filter(f => f !== faceObj);
-            }, 500);
-        }
-
-        function gameOver() {
-            isGameOver = true;
-            isPlaying = false;
-            clearTimeout(spawnTimer);
-            messageDisplay.innerHTML = `TIME UP! 🏁<br><span style="font-size:36px;">Final Score: ${score}</span>`;
+            setTimeout(() => { faceObj.el.remove(); activeFaces = activeFaces.filter(f => f !== faceObj); }, 500);
         }
 
         window.addEventListener('pointerdown', (e) => { e.preventDefault(); handleAction(); });
-        window.addEventListener('keydown', (e) => { if (e.code === 'Space' || e.code === 'Enter') handleAction(); });
     </script>
 </body>
 </html>
