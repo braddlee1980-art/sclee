@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>유준이 얼굴 맞추기 V5.8 (Impact Update)</title>
+    <title>유준이 얼굴 맞추기 V5.9</title>
     <style>
         :root {
             --bg-color: #f8f9fa;
@@ -30,9 +30,7 @@
             position: fixed; top: 0; left: 0; width: 100%; height: 6px;
             background: #eee; z-index: 100;
         }
-        #timer-bar {
-            width: 0%; height: 100%; background: var(--success-color);
-        }
+        #timer-bar { width: 0%; height: 100%; background: var(--success-color); }
 
         .header { text-align: center; margin-bottom: 20px; }
         .score-container {
@@ -51,10 +49,12 @@
             overflow: visible; cursor: pointer;
         }
 
+        /* 배경 이미지 가이드: 10px 크게 (140px) */
         #target-guide {
-            position: absolute; width: 130px; height: 130px;
+            position: absolute; width: 140px; height: 140px;
             background-size: contain; background-repeat: no-repeat;
             background-position: center; z-index: 1; opacity: 0.3;
+            display: block !important; /* 버그 방지용 */
         }
 
         .face-particle {
@@ -64,35 +64,28 @@
             will-change: left, transform, opacity;
         }
 
-        /* [성공] 커지면서 사라짐 */
         @keyframes successZoom {
             0% { transform: scale(1) rotate(0deg); opacity: 1; }
             100% { transform: scale(4) rotate(25deg); opacity: 0; }
         }
 
-        /* [실패] 작아지면서 사라짐 */
         @keyframes failShrink {
             0% { transform: scale(1) rotate(0deg); opacity: 1; }
             100% { transform: scale(0.1) rotate(-45deg); opacity: 0; }
         }
 
-        .success-animate {
-            animation: successZoom 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards !important;
-        }
-
-        .fail-animate {
-            animation: failShrink 0.5s ease-in forwards !important;
-        }
+        .success-animate { animation: successZoom 0.4s forwards !important; }
+        .fail-animate { animation: failShrink 0.5s forwards !important; }
 
         .footer { margin-top: 40px; text-align: center; min-height: 80px; }
-        #message { font-size: 26px; font-weight: 800; margin-bottom: 8px; transition: color 0.2s; }
+        #message { font-size: 26px; font-weight: 800; margin-bottom: 8px; }
         .hint { color: #aaa; font-size: 14px; }
     </style>
 </head>
 <body>
 
     <div id="timer-container"><div id="timer-bar"></div></div>
-    <div class="version-tag">유준이 얼굴 맞추기 버젼 5.8 (Impact Update)</div>
+    <div class="version-tag">유준이 얼굴 맞추기 버젼 5.9 (Overlapping 70%)</div>
 
     <div class="header">
         <div class="score-container">
@@ -112,8 +105,8 @@
     </div>
 
     <div class="footer">
-        <div id="message">터치해서 게임 시작!</div>
-        <div id="sub-message" class="hint">놓치면 얼굴이 쪼그라들어요!</div>
+        <div id="message">화면을 눌러 게임 시작!</div>
+        <div id="sub-message" class="hint">70% 이상 겹쳐야 성공입니다!</div>
     </div>
 
     <script>
@@ -125,30 +118,32 @@
         const timerBar = document.getElementById('timer-bar');
 
         const bgm = new Audio('bg_sound.mp3');
-        bgm.loop = false;
-
-        let score = 0;
-        let highScore = localStorage.getItem('faceGameHighScoreV5') || 0;
-        highScoreDisplay.textContent = highScore;
-
         const bpm = 175;
         const beatInterval = (60 / bpm) * 1000;
         
+        let score = 0;
+        let highScore = localStorage.getItem('faceGameHighScoreV5') || 0;
         let isPlaying = false;
         let isGameOver = false;
         let activeFaces = [];
         let spawnTimer;
+        let currentImageIndex = 1;
+
+        highScoreDisplay.textContent = highScore;
+
+        // 버그 수정: 초기 배경 이미지 즉시 설정
+        function updateGuideImage() {
+            guide.style.backgroundImage = `url('face_image_bg${currentImageIndex}.png')`;
+        }
+        updateGuideImage(); // 게임 시작 전 호출
 
         bgm.addEventListener('ended', () => gameOver());
         bgm.addEventListener('timeupdate', () => {
-            if (bgm.duration) {
-                timerBar.style.width = (bgm.currentTime / bgm.duration) * 100 + '%';
-            }
+            if (bgm.duration) timerBar.style.width = (bgm.currentTime / bgm.duration) * 100 + '%';
         });
 
         function createFace() {
             if (!isPlaying || isGameOver) return;
-
             const face = document.createElement('div');
             face.className = 'face-particle';
             const imgIdx = (Math.random() > 0.5) ? 1 : 2;
@@ -159,9 +154,8 @@
                 pos: container.offsetWidth,
                 startTime: performance.now(),
                 duration: beatInterval * 2,
-                processed: false // 판정 완료 여부
+                processed: false
             };
-
             container.appendChild(face);
             activeFaces.push(faceObj);
             spawnTimer = setTimeout(createFace, beatInterval);
@@ -170,30 +164,24 @@
         function animate() {
             if (!isPlaying || isGameOver) return;
             const now = performance.now();
+            const targetX = (container.offsetWidth / 2) - 60; // 얼굴 이미지 중심 기준 타겟
 
             activeFaces.forEach((faceObj, index) => {
                 if (faceObj.processed) return;
-
-                const elapsed = now - faceObj.startTime;
-                const progress = elapsed / faceObj.duration;
+                const progress = (now - faceObj.startTime) / faceObj.duration;
                 const currentPos = container.offsetWidth - (container.offsetWidth * progress * 0.8);
                 
                 faceObj.pos = currentPos;
                 faceObj.el.style.left = currentPos + 'px';
 
-                // 타겟 라인을 한참 지나치면 자동으로 실패 처리 (작아짐)
-                const targetX = (container.offsetWidth / 2) - 60;
-                if (currentPos < targetX - 100) {
-                    triggerFail(faceObj);
-                }
+                // 타겟을 완전히 벗어난 경우 (중첩 0%)
+                if (currentPos < targetX - 120) triggerFail(faceObj);
             });
-
             requestAnimationFrame(animate);
         }
 
         function handleAction() {
             if (isGameOver) { location.reload(); return; }
-
             if (!isPlaying) {
                 isPlaying = true;
                 bgm.play();
@@ -203,22 +191,29 @@
             }
 
             const targetX = (container.offsetWidth / 2) - 60;
+            const faceWidth = 120;
             let closestFace = null;
-            let minOffset = 999;
+            let maxOverlap = 0;
 
             activeFaces.forEach(f => {
                 if (!f.processed) {
-                    const off = Math.abs(f.pos - targetX);
-                    if (off < minOffset) { minOffset = off; closestFace = f; }
+                    // 두 요소 간의 중첩 영역 계산
+                    const overlap = Math.max(0, Math.min(f.pos + faceWidth, targetX + faceWidth) - Math.max(f.pos, targetX));
+                    const overlapRatio = overlap / faceWidth;
+                    
+                    if (overlapRatio > maxOverlap) {
+                        maxOverlap = overlapRatio;
+                        closestFace = f;
+                    }
                 }
             });
 
-            // 판정 범위 내에 있을 때 터치한 경우
-            if (closestFace && minOffset <= 60) {
-                const isPerfect = minOffset <= 15;
+            // 70% (0.7) 이상 겹쳤을 때 성공
+            if (closestFace && maxOverlap >= 0.7) {
+                const isPerfect = maxOverlap >= 0.9;
                 score += (isPerfect ? 50 : 20);
                 scoreDisplay.textContent = score;
-                messageDisplay.textContent = isPerfect ? "PERFECT! 🔥" : "GREAT! 👍";
+                messageDisplay.textContent = isPerfect ? "PERFECT! 🔥" : "GOOD! 👍";
                 messageDisplay.style.color = "#2ecc71";
                 
                 closestFace.processed = true;
@@ -229,20 +224,21 @@
                     localStorage.setItem('faceGameHighScoreV5', highScore);
                     highScoreDisplay.textContent = highScore;
                 }
+                
+                // 이미지 인덱스 교체
+                currentImageIndex = (currentImageIndex === 1) ? 2 : 1;
+                updateGuideImage();
                 clearFace(closestFace);
-            } else {
-                // 엉뚱한 데서 누르면 현재 가장 가까운 얼굴을 강제로 실패 처리
-                if (closestFace) triggerFail(closestFace);
+            } else if (closestFace) {
+                triggerFail(closestFace);
             }
         }
 
         function triggerFail(faceObj) {
             if (faceObj.processed) return;
             faceObj.processed = true;
-            
             messageDisplay.textContent = "MISS... 😢";
             messageDisplay.style.color = "#e74c3c";
-            
             faceObj.el.classList.add('fail-animate');
             clearFace(faceObj);
         }
@@ -258,8 +254,7 @@
             isGameOver = true;
             isPlaying = false;
             clearTimeout(spawnTimer);
-            messageDisplay.innerHTML = `TIME UP! 🏁<br><span style="font-size:40px;">Final Score: ${score}</span>`;
-            document.getElementById('sub-message').textContent = "다시 하려면 클릭하세요.";
+            messageDisplay.innerHTML = `GAME OVER! 🏁<br><span style="font-size:36px;">Final: ${score}</span>`;
         }
 
         window.addEventListener('pointerdown', (e) => { e.preventDefault(); handleAction(); });
