@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>유준이 얼굴 맞추기 V5.1</title>
+    <title>유준이 얼굴 맞추기 V5.2</title>
     <style>
         :root {
             --bg-color: #f8f9fa;
@@ -21,126 +21,72 @@
             align-items: center;
             justify-content: center;
             height: 100vh;
-            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            font-family: 'Pretendard', sans-serif;
             overflow: hidden;
             user-select: none;
             -webkit-user-select: none;
             touch-action: manipulation;
         }
 
-        /* 좌측 상단 버전 표시 */
         .version-tag {
             position: absolute;
             top: 20px;
             left: 20px;
             font-size: 14px;
-            color: #bbb;
+            color: #ccc;
             font-weight: 500;
             z-index: 10;
         }
 
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
+        .header { text-align: center; margin-bottom: 30px; }
         .score-container {
-            display: flex;
-            gap: 40px;
-            background: white;
-            padding: 15px 40px;
-            border-radius: 50px;
+            display: flex; gap: 40px; background: white;
+            padding: 15px 40px; border-radius: 50px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.05);
         }
-
-        .stat-item {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-item { display: flex; flex-direction: column; }
+        .label { font-size: 12px; color: #888; letter-spacing: 1px; }
         .value { font-size: 28px; font-weight: 800; color: var(--primary-color); }
 
         #game-container {
             position: relative;
-            width: 100%;
-            max-width: 900px;
-            height: 450px;
-            background-color: transparent;
-            display: flex;
-            align-items: center; 
-            justify-content: center;
-            overflow: hidden;
+            width: 100%; max-width: 900px; height: 400px;
+            display: flex; align-items: center; justify-content: center;
+            overflow: visible; /* 커질 때 잘리지 않도록 변경 */
             cursor: pointer;
         }
 
-        .track-line {
-            position: absolute;
-            width: 90%;
-            height: 2px;
-            background: linear-gradient(to right, transparent, #ddd, transparent);
-            top: 50%;
-            transform: translateY(-50%);
-            z-index: 0;
-        }
-
         #target-guide {
-            position: absolute;
-            width: 130px;
-            height: 130px;
-            background-image: url('face_image_bg.png');
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
-            z-index: 1;
-            pointer-events: none;
-            filter: grayscale(1) opacity(0.3);
-            transition: filter 0.3s;
+            position: absolute; width: 130px; height: 130px;
+            background: url('face_image_bg.png') no-repeat center/contain;
+            z-index: 1; opacity: 0.3;
         }
 
         #face {
-            position: absolute;
-            width: 120px;
-            height: 120px;
-            background-image: url('face_image.png');
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
-            background-color: transparent;
-            left: 100%; 
-            z-index: 2;
-            transition: transform 0.6s cubic-bezier(0.165, 0.84, 0.44, 1), opacity 0.5s ease-out;
-            will-change: left, transform, opacity;
+            position: absolute; width: 120px; height: 120px;
+            background: url('face_image.png') no-repeat center/contain;
+            left: 100%; z-index: 5;
+            transform: scale(1);
         }
 
-        #face.success-effect {
-            transform: scale(3) rotate(15deg);
-            opacity: 0;
+        /* [핵심] 성공 시 강제 애니메이션 효과 */
+        @keyframes successZoom {
+            0% { transform: scale(1) rotate(0deg); opacity: 1; }
+            100% { transform: scale(4) rotate(20deg); opacity: 0; }
         }
 
-        .footer {
-            margin-top: 40px;
-            text-align: center;
-            min-height: 80px;
+        .success-animate {
+            animation: successZoom 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards !important;
         }
 
-        #message {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            transition: all 0.2s;
-        }
-
-        .hint {
-            color: #aaa;
-            font-size: 14px;
-        }
+        .footer { margin-top: 40px; text-align: center; min-height: 80px; }
+        #message { font-size: 26px; font-weight: 800; margin-bottom: 8px; }
+        .hint { color: #aaa; font-size: 14px; }
     </style>
 </head>
 <body>
 
-    <!-- 버전 표시 추가 -->
-    <div class="version-tag">유준이 얼굴 맞추기 버젼 5.1</div>
+    <div class="version-tag">유준이 얼굴 맞추기 버젼 5.2</div>
 
     <div class="header">
         <div class="score-container">
@@ -156,14 +102,13 @@
     </div>
 
     <div id="game-container">
-        <div class="track-line"></div>
         <div id="target-guide"></div>
         <div id="face"></div>
     </div>
 
     <div class="footer">
-        <div id="message">화면을 눌러서 시작!</div>
-        <div id="sub-message" class="hint">정중앙에 맞출수록 높은 점수를 얻습니다.</div>
+        <div id="message">터치해서 시작!</div>
+        <div id="sub-message" class="hint">정중앙에 맞춰보세요.</div>
     </div>
 
     <script>
@@ -173,12 +118,10 @@
         const scoreDisplay = document.getElementById('current-score');
         const highScoreDisplay = document.getElementById('high-score');
         const messageDisplay = document.getElementById('message');
-        const subMessageDisplay = document.getElementById('sub-message');
 
         let score = 0;
         let highScore = localStorage.getItem('faceGameHighScoreV5') || 0;
-        
-        const initialSpeed = 2.0; 
+        const initialSpeed = 2.2; 
         let speed = initialSpeed;
         let position = 0;
         let isPlaying = false;
@@ -187,112 +130,79 @@
 
         highScoreDisplay.textContent = highScore;
 
-        const getTargetX = () => (container.offsetWidth / 2) - (face.offsetWidth / 2);
-
         function update() {
             if (!isPlaying) return;
             position -= speed;
-            if (position < -face.offsetWidth) {
-                position = container.offsetWidth;
-            }
+            if (position < -120) position = container.offsetWidth;
             face.style.left = position + 'px';
             animationId = requestAnimationFrame(update);
         }
 
         function handleAction() {
             if (!canInput) return;
-            if (!isPlaying) {
-                startRound();
-            } else {
-                stopRound();
-            }
+            if (!isPlaying) startRound();
+            else stopRound();
         }
 
         function startRound() {
-            face.classList.remove('success-effect');
+            // 모든 효과 리셋
+            face.classList.remove('success-animate');
             face.style.opacity = '1';
-            face.style.transform = 'scale(1) rotate(0deg)';
-            guide.style.filter = 'grayscale(0) opacity(0.6)';
+            face.style.left = container.offsetWidth + 'px';
             position = container.offsetWidth;
-            face.style.left = position + 'px';
+            
             isPlaying = true;
-            messageDisplay.textContent = "준비하시고...";
+            canInput = true;
+            messageDisplay.textContent = "오는 중...";
             messageDisplay.style.color = "#333";
-            subMessageDisplay.textContent = "지금이야 싶을 때 터치!";
             update();
         }
 
         function stopRound() {
             isPlaying = false;
-            canInput = false; 
+            canInput = false;
             cancelAnimationFrame(animationId);
             
-            const targetX = getTargetX();
+            const targetX = (container.offsetWidth / 2) - 60;
             const offset = Math.abs(position - targetX);
             
-            let earnedScore = 0;
-            let resultText = "";
-            let textColor = "";
-
-            if (offset <= 8) {
-                earnedScore = 50;
-                resultText = "PERFECT!!! 🌟";
-                textColor = "#f1c40f";
-            } else if (offset <= 20) {
-                earnedScore = 20;
-                resultText = "GREAT! 👍";
-                textColor = "#2ecc71";
-            } else if (offset <= 35) {
-                earnedScore = 10;
-                resultText = "GOOD :)";
-                textColor = "#3498db";
-            } else {
-                earnedScore = 0;
-            }
-
-            if (earnedScore > 0) {
-                score += earnedScore;
-                speed += 0.45;
+            if (offset <= 35) {
+                // 성공 판정
+                score += (offset <= 10 ? 50 : 20);
+                speed += 0.5;
                 scoreDisplay.textContent = score;
-                messageDisplay.textContent = resultText;
-                messageDisplay.style.color = textColor;
-                face.classList.add('success-effect');
-                guide.style.filter = 'grayscale(0) opacity(1)';
-                
+                messageDisplay.textContent = offset <= 10 ? "PERFECT! ✨" : "GREAT! 👍";
+                messageDisplay.style.color = "#2ecc71";
+
+                // [효과 실행] CSS 애니메이션 클래스 주입
+                face.classList.add('success-animate');
+
                 if (score > highScore) {
                     highScore = score;
                     localStorage.setItem('faceGameHighScoreV5', highScore);
                     highScoreDisplay.textContent = highScore;
                 }
                 
-                setTimeout(() => {
-                    canInput = true;
-                    startRound();
-                }, 800);
+                // 애니메이션이 완전히 끝난 후 다음 라운드
+                setTimeout(startRound, 800);
             } else {
-                messageDisplay.textContent = "아까워요! MISS 😢";
+                // 실패
+                messageDisplay.textContent = "MISS! 😢";
                 messageDisplay.style.color = "#e74c3c";
-                subMessageDisplay.textContent = "다시 도전하려면 화면을 누르세요.";
                 score = 0;
                 speed = initialSpeed;
                 scoreDisplay.textContent = score;
-                guide.style.filter = 'grayscale(1) opacity(0.1)';
                 canInput = true;
             }
         }
 
-        window.addEventListener('pointerdown', handleAction);
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' || e.code === 'Enter') {
-                e.preventDefault();
-                handleAction();
-            }
+        window.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            handleAction();
         });
-        window.addEventListener('resize', () => {
-            if (!isPlaying) {
-                position = container.offsetWidth;
-                face.style.left = position + 'px';
-            }
+        
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'Enter') handleAction();
         });
     </script>
 </body>
