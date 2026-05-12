@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>얼굴 타이밍 맞추기 게임 V5.0</title>
+    <title>유준이 얼굴 맞추기 V5.1</title>
     <style>
         :root {
             --bg-color: #f8f9fa;
@@ -28,7 +28,17 @@
             touch-action: manipulation;
         }
 
-        /* 상단 UI 레이아웃 */
+        /* 좌측 상단 버전 표시 */
+        .version-tag {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 14px;
+            color: #bbb;
+            font-weight: 500;
+            z-index: 10;
+        }
+
         .header {
             text-align: center;
             margin-bottom: 30px;
@@ -51,7 +61,6 @@
         .label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
         .value { font-size: 28px; font-weight: 800; color: var(--primary-color); }
 
-        /* 게임 필드 */
         #game-container {
             position: relative;
             width: 100%;
@@ -65,7 +74,6 @@
             cursor: pointer;
         }
 
-        /* 하단 가로 가이드 라인 */
         .track-line {
             position: absolute;
             width: 90%;
@@ -76,7 +84,6 @@
             z-index: 0;
         }
 
-        /* 가이드 이미지 (130px) */
         #target-guide {
             position: absolute;
             width: 130px;
@@ -91,7 +98,6 @@
             transition: filter 0.3s;
         }
 
-        /* 얼굴 이미지 (120px) */
         #face {
             position: absolute;
             width: 120px;
@@ -107,13 +113,11 @@
             will-change: left, transform, opacity;
         }
 
-        /* 성공 시 확대+투명 애니메이션 */
         #face.success-effect {
             transform: scale(3) rotate(15deg);
             opacity: 0;
         }
 
-        /* 하단 메시지 영역 */
         .footer {
             margin-top: 40px;
             text-align: center;
@@ -131,16 +135,12 @@
             color: #aaa;
             font-size: 14px;
         }
-
-        /* 정확도 등급 표시 애니메이션 */
-        @keyframes popUp {
-            0% { transform: scale(0.5); opacity: 0; }
-            50% { transform: scale(1.2); opacity: 1; }
-            100% { transform: scale(1); opacity: 1; }
-        }
     </style>
 </head>
 <body>
+
+    <!-- 버전 표시 추가 -->
+    <div class="version-tag">유준이 얼굴 맞추기 버젼 5.1</div>
 
     <div class="header">
         <div class="score-container">
@@ -178,7 +178,7 @@
         let score = 0;
         let highScore = localStorage.getItem('faceGameHighScoreV5') || 0;
         
-        const initialSpeed = 2.0; // V5 기준 시작 속도
+        const initialSpeed = 2.0; 
         let speed = initialSpeed;
         let position = 0;
         let isPlaying = false;
@@ -191,14 +191,10 @@
 
         function update() {
             if (!isPlaying) return;
-
             position -= speed;
-            
-            // 화면 왼쪽 끝 도달 시 오른쪽에서 재출현
             if (position < -face.offsetWidth) {
                 position = container.offsetWidth;
             }
-
             face.style.left = position + 'px';
             animationId = requestAnimationFrame(update);
         }
@@ -213,20 +209,16 @@
         }
 
         function startRound() {
-            // 시각 효과 초기화
             face.classList.remove('success-effect');
             face.style.opacity = '1';
             face.style.transform = 'scale(1) rotate(0deg)';
             guide.style.filter = 'grayscale(0) opacity(0.6)';
-            
-            // 위치 초기화 (오른쪽 밖에서 시작)
             position = container.offsetWidth;
             face.style.left = position + 'px';
-            
             isPlaying = true;
-            messageDisplay.textContent = "집중하세요...";
+            messageDisplay.textContent = "준비하시고...";
             messageDisplay.style.color = "#333";
-            subMessageDisplay.textContent = "타이밍에 맞춰 클릭!";
+            subMessageDisplay.textContent = "지금이야 싶을 때 터치!";
             update();
         }
 
@@ -238,7 +230,6 @@
             const targetX = getTargetX();
             const offset = Math.abs(position - targetX);
             
-            // 정확도 등급 판정
             let earnedScore = 0;
             let resultText = "";
             let textColor = "";
@@ -256,18 +247,15 @@
                 resultText = "GOOD :)";
                 textColor = "#3498db";
             } else {
-                earnedScore = 0; // 실패
+                earnedScore = 0;
             }
 
             if (earnedScore > 0) {
-                // 성공 시
                 score += earnedScore;
-                speed += 0.45; // 속도 증가폭 조정
+                speed += 0.45;
                 scoreDisplay.textContent = score;
                 messageDisplay.textContent = resultText;
                 messageDisplay.style.color = textColor;
-                
-                // 성공 이펙트
                 face.classList.add('success-effect');
                 guide.style.filter = 'grayscale(0) opacity(1)';
                 
@@ -281,12 +269,10 @@
                     canInput = true;
                     startRound();
                 }, 800);
-
             } else {
-                // 완전히 실패했을 때
-                messageDisplay.textContent = "MISS! 😢";
+                messageDisplay.textContent = "아까워요! MISS 😢";
                 messageDisplay.style.color = "#e74c3c";
-                subMessageDisplay.textContent = "다시 도전하려면 클릭하세요.";
+                subMessageDisplay.textContent = "다시 도전하려면 화면을 누르세요.";
                 score = 0;
                 speed = initialSpeed;
                 scoreDisplay.textContent = score;
@@ -295,20 +281,13 @@
             }
         }
 
-        // 전체 화면 조작 이벤트
-        window.addEventListener('pointerdown', (e) => {
-            handleAction();
-        });
-
-        // 키보드 조작
+        window.addEventListener('pointerdown', handleAction);
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space' || e.code === 'Enter') {
                 e.preventDefault();
                 handleAction();
             }
         });
-
-        // 화면 크기 대응
         window.addEventListener('resize', () => {
             if (!isPlaying) {
                 position = container.offsetWidth;
