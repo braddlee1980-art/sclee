@@ -1,122 +1,108 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MapPhoto - 추억 지도</title>
+let map;
+let markers = []; // 생성된 마커들을 관리할 배열
+
+// 1. 네이버 지도 초기화
+function initMap() {
+    const mapOptions = {
+        center: new naver.maps.LatLng(37.555142, 126.970447), // 기본 중심지: 서울역 인근
+        zoom: 13,
+        zoomControl: true,
+        zoomControlOptions: { position: naver.maps.Position.RIGHT_CENTER }
+    };
+    map = new naver.maps.Map('map-container', mapOptions);
+}
+
+if (typeof naver !== 'undefined' && naver.maps) {
+    initMap();
+} else {
+    console.error("네이버 지도 스크립트 로드 실패");
+}
+
+// 플로팅 버튼 클릭 시 파일 선택창 트리거
+function triggerUpload() {
+    document.getElementById('file-input').click();
+}
+
+// 2. 사진을 선택했을 때 처리하는 핵심 비즈니스 로직
+function handleFiles(files) {
+    if (files.length === 0) return;
     
-    <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=ha69a2ib96"></script>
-
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-        #map-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
-        .top-bar {
-            position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
-            width: 90%; max-width: 600px; height: 50px; background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(8px); border-radius: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 10; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;
-        }
-        .search-input { border: none; outline: none; background: transparent; width: 70%; font-size: 16px; }
-        .upload-btn {
-            position: absolute; bottom: 30px; right: 20px; width: 60px; height: 60px;
-            background-color: #007AFF; border-radius: 50%; color: white; border: none;
-            font-size: 30px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 16px rgba(0,122,255,0.4);
-            z-index: 10; display: flex; align-items: center; justify-content: center; transition: transform 0.1s ease;
-        }
-        .upload-btn:active { transform: scale(0.92); }
-    </style>
-</head>
-<body>
-
-    <div id="map-container"></div>
-
-    <div class="top-bar">
-        <span style="font-weight: bold; cursor: pointer;">≡</span>
-        <input type="text" class="search-input" placeholder="추억을 남긴 장소나 날짜 검색">
-        <span style="cursor: pointer;">👤</span>
-    </div>
-
-    <button class="upload-btn" onclick="triggerUpload()">+</button>
-    <input type="file" id="file-input" multiple accept="image/*" style="display: none;" onchange="handleFiles(this.files)">
-
-    <script>
-        let map;
-        let markers = []; // 생성된 마커들을 관리할 배열
-
-        // 1. 네이버 지도 초기화
-        function initMap() {
-            const mapOptions = {
-                center: new naver.maps.LatLng(37.555142, 126.970447), // 기본 중심지: 서울역 인근
-                zoom: 13,
-                zoomControl: true,
-                zoomControlOptions: { position: naver.maps.Position.RIGHT_CENTER }
-            };
-            map = new naver.maps.Map('map-container', mapOptions);
-        }
-
-        if (typeof naver !== 'undefined' && naver.maps) {
-            initMap();
-        } else {
-            console.error("네이버 지도 스크립트 로드 실패");
-        }
-
-        // 플로팅 버튼 클릭 시 파일 선택창 트리거
-        function triggerUpload() {
-            document.getElementById('file-input').click();
-        }
-
-        // 2. 사진을 선택했을 때 처리하는 핵심 비즈니스 로직
-        function handleFiles(files) {
-            if (files.length === 0) return;
+    Array.from(files).forEach((file) => {
+        // 브라우저에서 사용할 임시 이미지 URL 생성
+        const imageUrl = URL.createObjectURL(file);
+        
+        // EXIF 데이터 추출 시작
+        EXIF.getData(file, function() {
+            // 위도(Lat), 경도(Lng) 가져오기
+            const lat = EXIF.getTag(this, "GPSLatitude");
+            const lng = EXIF.getTag(this, "GPSLongitude");
+            const latRef = EXIF.getTag(this, "GPSLatitudeRef") || "N";
+            const lngRef = EXIF.getTag(this, "GPSLongitudeRef") || "E";
             
-            // FileList 객체를 배열로 변환하여 순회
-            Array.from(files).forEach((file) => {
-                // 브라우저에서 사용 가능한 임시 이미지 URL 생성
-                const imageUrl = URL.createObjectURL(file);
+            // GPS 정보가 유효하게 존재하는 경우
+            if (lat && lng) {
+                // EXIF 내부의 도/분/초(도분초 도 단위 변환) 형태 포맷 변환하기
+                const finalLat = convertToDecimal(lat, latRef);
+                const finalLng = convertToDecimal(lng, lngRef);
                 
-                // [임시 기능] 실제 EXIF 데이터 추출 전까지는 현재 지도 중심점 주변에 랜덤하게 마커를 뿌립니다.
+                // 변환된 실제 위치에 사진 마커 생성
+                createPhotoMarker(finalLat, finalLng, imageUrl);
+            } else {
+                // [예외 처리] 사진에 GPS 정보가 없는 경우 고지 후 현재 지도 중심 근처에 뿌림
+                console.warn(`${file.name} 사진에 GPS 정보가 없습니다. 현재 중심 위치에 임시 표시합니다.`);
+                
                 const currentCenter = map.getCenter();
-                const deltaLat = (Math.random() - 0.5) * 0.015; // 약 1.5km 반경 내 무작위 변동
-                const deltaLng = (Math.random() - 0.5) * 0.015;
+                const deltaLat = (Math.random() - 0.5) * 0.01;
+                const deltaLng = (Math.random() - 0.5) * 0.01;
                 
-                const randomLat = currentCenter.lat() + deltaLat;
-                const randomLng = currentCenter.lng() + deltaLng;
-                
-                // 지도에 사진 마커 추가
-                createPhotoMarker(randomLat, randomLng, imageUrl);
-            });
-            
-            // 동일한 사진을 연달아 올릴 때도 이벤트가 정상 작동하도록 input 초기화
-            document.getElementById('file-input').value = '';
-        }
+                createPhotoMarker(currentCenter.lat() + deltaLat, currentCenter.lng() + deltaLng, imageUrl);
+            }
+        });
+    });
+    
+    // input 초기화
+    document.getElementById('file-input').value = '';
+}
 
-        // 3. 지도 위에 커스텀 이미지 마커를 생성하는 함수
-        function createPhotoMarker(lat, lng, imageUrl) {
-            const position = new naver.maps.LatLng(lat, lng);
-            
-            // HTML을 사용해 원형 사진 테두리 스타일의 마커 디자인
-            const markerContent = `
-                <div style="width: 55px; height: 55px; border-radius: 50%; border: 3px solid white; 
-                            box-shadow: 0 3px 10px rgba(0,0,0,0.3); overflow: hidden; background: #e0e0e0;
-                            display: flex; align-items: center; justify-content: center;">
-                    <img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;">
-                </div>
-            `;
-            
-            // 네이버 커스텀 마커 생성
-            const marker = new naver.maps.Marker({
-                position: position,
-                map: map,
-                icon: {
-                    content: markerContent,
-                    anchor: new naver.maps.Point(27.5, 27.5) // 마커의 중심(55px의 절반)을 좌표에 정확히 일치시킴
-                }
-            });
-            
-            // 나중에 마커 제어(삭제, 일괄 변경 등)를 위해 배열에 저장
-            markers.push(marker);
+// 3. EXIF 도/분/초 데이터를 지도 인식용 십진수(Decimal) 좌표로 변환하는 함수
+function convertToDecimal(gpsData, ref) {
+    // gpsData = [도, 분, 초] 배열 형태임
+    const degrees = gpsData[0];
+    const minutes = gpsData[1];
+    const seconds = gpsData[2];
+    
+    let decimal = degrees + (minutes / 60) + (seconds / 3600);
+    
+    // 남위(S)나 서경(W)일 경우 음수로 변환 (한국은 북위N, 동경E라 보통 그대로 양수)
+    if (ref === "S" || ref === "W") {
+        decimal = decimal * -1;
+    }
+    return decimal;
+}
+
+// 4. 지도 위에 커스텀 이미지 마커를 생성하는 함수
+function createPhotoMarker(lat, lng, imageUrl) {
+    const position = new naver.maps.LatLng(lat, lng);
+    
+    const markerContent = `
+        <div style="width: 55px; height: 55px; border-radius: 50%; border: 3px solid white; 
+                    box-shadow: 0 3px 10px rgba(0,0,0,0.3); overflow: hidden; background: #e0e0e0;
+                    display: flex; align-items: center; justify-content: center;">
+            <img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;">
+        </div>
+    `;
+    
+    const marker = new naver.maps.Marker({
+        position: position,
+        map: map,
+        icon: {
+            content: markerContent,
+            anchor: new naver.maps.Point(27.5, 27.5)
         }
-    </script>
-</body>
-</html>
+    });
+    
+    markers.push(marker);
+    
+    // [선택 사항] 새로 추가된 사진의 위치로 지도 중심 이동하기
+    map.setCenter(position);
+}
