@@ -29,12 +29,13 @@ function triggerUpload() {
     document.getElementById('file-input').click();
 }
 
-// 3. 파일 선택 시 EXIF 추출 및 마커 배치 처리
+// 3. 파일 선택 시 EXIF 추출 및 최적화 처리
 function handleFiles(files) {
     if (files.length === 0) return;
     
     Array.from(files).forEach((file) => {
-        const imageUrl = URL.createObjectURL(file);
+        // 원본 파일의 가상 URL 생성 (EXIF 분석 및 이미지 로드용)
+        const originalUrl = URL.createObjectURL(file);
         
         EXIF.getData(file, function() {
             const lat = EXIF.getTag(this, "GPSLatitude");
@@ -42,24 +43,67 @@ function handleFiles(files) {
             const latRef = EXIF.getTag(this, "GPSLatitudeRef") || "N";
             const lngRef = EXIF.getTag(this, "GPSLongitudeRef") || "E";
             
+            let finalLat, finalLng;
+            
             if (lat && lng) {
-                const finalLat = convertToDecimal(lat, latRef);
-                const finalLng = convertToDecimal(lng, lngRef);
-                createPhotoMarker(finalLat, finalLng, imageUrl);
+                finalLat = convertToDecimal(lat, latRef);
+                finalLng = convertToDecimal(lng, lngRef);
             } else {
-                console.warn(`[GPS 없음] 현재 중심 근처에 표시: ${file.name}`);
+                // GPS 정보가 없는 사진은 현재 중심 근처 무작위 배치
                 const currentCenter = map.getCenter();
-                const deltaLat = (Math.random() - 0.5) * 0.01;
-                const deltaLng = (Math.random() - 0.5) * 0.01;
-                createPhotoMarker(currentCenter.lat() + deltaLat, currentCenter.lng() + deltaLng, imageUrl);
+                finalLat = currentCenter.lat() + (Math.random() - 0.5) * 0.01;
+                finalLng = currentCenter.lng() + (Math.random() - 0.5) * 0.01;
             }
+            
+            // [최적화 핵심] 원본 이미지를 100px 크기의 섬네일로 압축하여 마커 생성
+            resizeImage(originalUrl, 100, function(resizedCanvasUrl) {
+                createPhotoMarker(finalLat, finalLng, resizedCanvasUrl);
+                
+                // 마커 생성이 끝나면 메모리 확보를 위해 원본 가상 URL 해제
+                URL.revokeObjectURL(originalUrl);
+            });
         });
     });
     
     document.getElementById('file-input').value = '';
 }
 
-// 4. GPS 도/분/초 데이터를 십진수로 변환
+// 4. [신규] Canvas를 이용한 이미지 리사이징(압축) 함수
+function resizeImage(url, targetSize, callback) {
+    const img = new Image();
+    img.src = url;
+    img.onload = function() {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 정정사각형 섬네일을 만들기 위해 원본 크기에서 비율 계산 (Center Crop 효과)
+        let srcX = 0;
+        let srcY = 0;
+        let srcWidth = img.width;
+        let srcHeight = img.height;
+        
+        if (img.width > img.height) {
+            srcX = (img.width - img.height) / 2;
+            srcWidth = img.height;
+        } else {
+            srcY = (img.height - img.width) / 2;
+            srcHeight = img.width;
+        }
+        
+        // 캔버스 크기를 타겟 사이즈(100px)로 고정
+        canvas.width = targetSize;
+        canvas.height = targetSize;
+        
+        // 캔버스에 이미지 그리기 (원본의 중심부를 크롭하여 100x100으로 리사이즈)
+        ctx.drawImage(img, srcX, srcY, srcWidth, srcHeight, 0, 0, targetSize, targetSize);
+        
+        // 캔버스 내용을 압축된 가벼운 데이터 URL(Base64)로 변환하여 콜백 반환
+        const resizedUrl = canvas.toDataURL('image/jpeg', 0.7); // 70% 화질 압축
+        callback(resizedUrl);
+    };
+}
+
+// 5. GPS 도/분/초 데이터를 십진수로 변환
 function convertToDecimal(gpsData, ref) {
     const degrees = gpsData[0];
     const minutes = gpsData[1];
@@ -69,7 +113,7 @@ function convertToDecimal(gpsData, ref) {
     return decimal;
 }
 
-// 5. 지도 위에 커스텀 이미지 마커 생성
+// 6. 지도 위에 커스텀 이미지 마커 생성
 function createPhotoMarker(lat, lng, imageUrl) {
     if (!map) return;
     const position = new naver.maps.LatLng(lat, lng);
