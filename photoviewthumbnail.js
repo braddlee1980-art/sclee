@@ -1,7 +1,7 @@
 // =========================================================================
 // 전역 설정 및 변수
 // =========================================================================
-const APP_VERSION = "v1.7.0"; // 마커 전체 영역 피팅 기능 추가
+const APP_VERSION = "v1.9.0"; // 근접 사진 겹침 방지(나선형 분산) 로직 추가
 let map;
 let markers = [];
 
@@ -15,7 +15,6 @@ function initMap() {
         return;
     }
     
-    // 최초 기본 화면 (사진 로드 전 보여줄 기본 위치)
     const mapOptions = {
         center: new naver.maps.LatLng(37.555142, 126.970447),
         zoom: 11,
@@ -45,14 +44,15 @@ function addVersionControl(mapInstance, versionText) {
     new naver.maps.CustomControl(versionEl, { position: naver.maps.Position.LEFT_BOTTOM }).setMap(mapInstance);
 }
 
-// [핵심 개편] 모든 비동기 사진 로드가 끝나는 것을 추적하여 화면을 이동시킵니다.
 function loadLocalImages() {
     if (IMAGE_FILES.length === 0) return;
 
-    // 네이버 지도에서 제공하는 "좌표들을 포함하는 사각형 사각영역(Bounds)" 객체 생성
     const bounds = new naver.maps.LatLngBounds();
     let processedCount = 0;
     let validGpsCount = 0;
+    
+    // 비동기로 추출된 사진 데이터들을 임시로 모아둘 배열
+    const photoDataList = [];
 
     IMAGE_FILES.forEach((fileName) => {
         const relativePath = `img/${fileName}`;
@@ -70,29 +70,37 @@ function loadLocalImages() {
                     const lngRef = EXIF.getTag(this, "GPSLongitudeRef") || "E";
                     const orientation = EXIF.getTag(this, "Orientation") || 1;
                     
+                    // EXIF에서 촬영 날짜 추출 (형식: "YYYY:MM:DD HH:MM:SS" -> 앞 10자리 날짜만 사용)
+                    const dateTime = EXIF.getTag(this, "DateTimeOriginal") || EXIF.getTag(this, "DateTime") || "";
+                    const dateStr = dateTime.substring(0, 10).replace(/:/g, "-") || "UNKNOWN_DATE";
+
                     let finalLat, finalLng;
+                    let hasGps = false;
                     
                     if (lat && lng) {
                         finalLat = convertToDecimal(lat, latRef);
                         finalLng = convertToDecimal(lng, lngRef);
-                        
-                        // GPS 정보가 올바르게 있는 좌표만 영역에 확장 포함시킴
-                        const point = new naver.maps.LatLng(finalLat, finalLng);
-                        bounds.extend(point);
+                        hasGps = true;
                         validGpsCount++;
                     } else {
-                        // GPS가 없는 사진은 마커들을 다 모은 뒤 중심 주변에 뿌리기 위해 임시값 지정
                         finalLat = 37.555142 + (Math.random() - 0.5) * 0.02;
                         finalLng = 126.970447 + (Math.random() - 0.5) * 0.02;
                     }
 
                     resizeImage(relativePath, 100, orientation, function(resizedCanvasUrl) {
-                        createPhotoMarker(finalLat, finalLng, resizedCanvasUrl);
+                        // 가공된 데이터를 임시 리스트에 저장
+                        photoDataList.push({
+                            lat: finalLat,
+                            lng: finalLng,
+                            hasGps: hasGps,
+                            date: dateStr,
+                            url: resizedCanvasUrl
+                        });
                         
-                        // 비동기 카운트 체크: 마지막 사진 처리가 끝났는지 확인
                         processedCount++;
+                        // 모든 사진 분석이 완전히 끝났을 때 겹침 방지 연산 및 마커 생성 시작
                         if (processedCount === IMAGE_FILES.length) {
-                            fitMapToMarkers(bounds, validGpsCount);
+                            processAndRenderMarkers(photoDataList, bounds, validGpsCount);
                         }
                     });
                 });
@@ -101,29 +109,80 @@ function loadLocalImages() {
                 console.error("이미지 로딩 에러:", error);
                 processedCount++;
                 if (processedCount === IMAGE_FILES.length) {
-                    fitMapToMarkers(bounds, validGpsCount);
+                    processAndRenderMarkers(photoDataList, bounds, validGpsCount);
                 }
             });
     });
 }
 
-// [신규] 모든 마커가 화면에 꽉 차게 들어오도록 포커싱하는 함수
-function fitMapToMarkers(bounds, validGpsCount) {
-    if (!map) return;
+// [신규] 겹침 방지 처리 후 최종 마커 렌더링
+function processAndRenderMarkers(photoList, bounds, validGpsCount) {
+    // 거리가 가까운 그룹끼리 묶기 위한 방문 여부 체크 배열
+    const visited = new Array(photoList.length).fill(false);
 
-    if (validGpsCount > 0) {
-        // 모든 사진 좌표 정보가 포함된 영역으로 지도를 움직이고 줌 레벨을 맞춤
-        map.panToBounds(bounds);
-        
-        // 너무 타이트하게 확대되는 것을 방지하기 위해 줌 아웃 여유 유도 (옵션)
-        setTimeout(() => {
-            map.setZoom(map.getZoom() - 1, true);
-        }, 400);
-        
-        console.log(`🎯 총 ${validGpsCount}개의 위치 정보를 기반으로 화면 정렬 완료!`);
-    } else {
-        console.log("⚠️ 위치 정보(GPS)가 포함된 사진이 없어 기본 화면을 유지합니다.");
+    for (let i = 0; i < photoList.length; i++) {
+        if (visited[i]) continue;
+        if (!photoList[i].hasGps) {
+            // GPS가 없는 사진은 겹침 연산에서 제외하고 바로 뿌림
+            createPhotoMarker(photoList[i].lat, photoList[i].lng, photoList[i].url);
+            continue;
+        }
+
+        // 같은 날짜이면서 100m 이내에 뭉쳐 있는 사진 모으기
+        const cluster = [photoList[i]];
+        visited[i] = true;
+
+        for (let j = i + 1; j < photoList.length; j++) {
+            if (visited[j] || !photoList[j].hasGps) continue;
+
+            // 조건: 촬영 날짜가 같고, 대략 100m 이내 거리일 때
+            if (photoList[i].date === photoList[j].date) {
+                const distance = getDistance(photoList[i].lat, photoList[i].lng, photoList[j].lat, photoList[j].lng);
+                if (distance <= 100) {
+                    cluster.push(photoList[j]);
+                    visited[j] = true;
+                }
+            }
+        }
+
+        // 뭉쳐 있는 사진들을 반 이상 겹치지 않게 나선형 분산 배치하여 마커 생성
+        cluster.forEach((photo, index) => {
+            let targetLat = photo.lat;
+            let targetLng = photo.lng;
+
+            if (index > 0) {
+                // 사진 크기가 55px이므로 지도의 스케일에 따라 반 이상(약 30~35px 이상) 벌려주기 위한 오프셋 연산
+                // 황금비 각도(약 137.5도)를 활용한 나선형 구조로 좌표를 미세 이동
+                const angle = index * 2.39996; 
+                const radius = 0.00035 * Math.sqrt(index); // 위경도 기준 반 이상 겹치지 않을 분산 반경
+
+                targetLat += radius * Math.sin(angle);
+                targetLng += radius * Math.cos(angle) * 1.2; // 경도 보정
+            }
+
+            createPhotoMarker(targetLat, targetLng, photo.url);
+            
+            // 전체 화면 피팅을 위해 이동된 좌표도 bounds 영역에 포함
+            bounds.extend(new naver.maps.LatLng(targetLat, targetLng));
+        });
     }
+
+    // 마커가 다 그려진 후 전체 화면 맞춤 실행
+    if (validGpsCount > 0) {
+        map.fitBounds(bounds, { top: 60, right: 60, bottom: 60, left: 60 });
+    }
+}
+
+// 두 좌표 간의 직선 거리(미터)를 계산하는 하버사인(Haversine) 함수
+function getDistance(lat1, lng1, lat2, lng2) {
+    const R = 6371e3; // 지구 반지름 (미터)
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
 }
 
 function resizeImage(imgUrl, targetSize, orientation, callback) {
@@ -170,7 +229,7 @@ function createPhotoMarker(lat, lng, imageUrl) {
             box-shadow: 0 3px 10px rgba(0,0,0,0.3); overflow: hidden; background: #e0e0e0;
             display: flex; align-items: center; justify-content: center;
             transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); cursor: pointer;
-        " onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'">
+        " onmouseover="this.style.transform='scale(1.15) z-index: 999;'" onmouseout="this.style.transform='scale(1)'">
             <img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover; pointer-events: none;">
         </div>
     `;
