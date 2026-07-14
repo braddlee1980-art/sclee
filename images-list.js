@@ -1,5 +1,16 @@
 // 자동 생성된 파일 목록입니다.
 const IMAGE_FILES = [
+    "IMG_0190.jpeg",
+    "IMG_0191.jpeg",
+    "IMG_0192.jpeg",
+    "IMG_0193.jpeg",
+    "IMG_0194.jpeg",
+    "IMG_0195.jpeg",
+    "IMG_0196.jpeg",
+    "IMG_0197.jpeg",
+    "IMG_0198.jpeg",
+    "IMG_0199.jpeg",
+    "IMG_0200.jpeg",
     "IMG_8364.jpeg",
     "IMG_8365.jpeg",
     "IMG_8369.jpeg",
