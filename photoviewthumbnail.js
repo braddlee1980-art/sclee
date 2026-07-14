@@ -1,5 +1,7 @@
-// 전역 변수 설정
-const APP_VERSION = "v1.1.0";
+// =========================================================================
+// 전역 설정 및 변수
+// =========================================================================
+const APP_VERSION = "v1.2.0"; // 마이너 버전 업그레이드
 let map;
 let markers = [];
 
@@ -24,13 +26,13 @@ function initMap() {
     
     map = new naver.maps.Map('map-container', mapOptions);
     
-    // [신규] 지도 위에 버전 표시 컨트롤 생성 및 배치
+    // 지도 위에 버전 표시 컨트롤 생성 및 배치
     addVersionControl(map, APP_VERSION);
     
     console.log(`지도 초기화 완료 (버전: ${APP_VERSION})`);
 }
 
-// 2. [신규] 네이버 지도 커스텀 컨트롤로 버전 표시기 UI 추가
+// 2. 네이버 지도 커스텀 컨트롤로 버전 표시기 UI 추가
 function addVersionControl(mapInstance, versionText) {
     const versionEl = document.createElement('div');
     versionEl.innerHTML = `
