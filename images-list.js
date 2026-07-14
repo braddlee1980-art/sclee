@@ -18,5 +18,15 @@ const IMAGE_FILES = [
     "IMG_8371.jpeg",
     "IMG_8372.jpeg",
     "IMG_8373.jpeg",
-    "IMG_8375.jpeg"
+    "IMG_8375.jpeg",
+    "IMG_9240.jpeg",
+    "IMG_9246.jpeg",
+    "IMG_9251.jpeg",
+    "IMG_9263.jpeg",
+    "IMG_9265.jpeg",
+    "IMG_9276.jpeg",
+    "IMG_9278.jpeg",
+    "IMG_9293.jpeg",
+    "IMG_9295.jpeg",
+    "IMG_9296.jpeg"
 ];
