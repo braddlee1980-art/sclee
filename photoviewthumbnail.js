@@ -1,7 +1,7 @@
 // =========================================================================
 // 전역 설정 및 변수
 // =========================================================================
-const APP_VERSION = "v1.7.0"; // 마커 전체 영역 피팅 기능 추가
+const APP_VERSION = "v1.8.0"; // 마커 전체 화면 완벽 피팅 적용
 let map;
 let markers = [];
 
@@ -15,7 +15,7 @@ function initMap() {
         return;
     }
     
-    // 최초 기본 화면 (사진 로드 전 보여줄 기본 위치)
+    // 초기 기본 로딩 화면
     const mapOptions = {
         center: new naver.maps.LatLng(37.555142, 126.970447),
         zoom: 11,
@@ -45,11 +45,10 @@ function addVersionControl(mapInstance, versionText) {
     new naver.maps.CustomControl(versionEl, { position: naver.maps.Position.LEFT_BOTTOM }).setMap(mapInstance);
 }
 
-// [핵심 개편] 모든 비동기 사진 로드가 끝나는 것을 추적하여 화면을 이동시킵니다.
 function loadLocalImages() {
     if (IMAGE_FILES.length === 0) return;
 
-    // 네이버 지도에서 제공하는 "좌표들을 포함하는 사각형 사각영역(Bounds)" 객체 생성
+    // 네이버 지도 영역(Bounds) 객체 생성
     const bounds = new naver.maps.LatLngBounds();
     let processedCount = 0;
     let validGpsCount = 0;
@@ -76,12 +75,12 @@ function loadLocalImages() {
                         finalLat = convertToDecimal(lat, latRef);
                         finalLng = convertToDecimal(lng, lngRef);
                         
-                        // GPS 정보가 올바르게 있는 좌표만 영역에 확장 포함시킴
+                        // 정상 GPS 좌표 등록 및 영역(Bounds) 확장
                         const point = new naver.maps.LatLng(finalLat, finalLng);
                         bounds.extend(point);
                         validGpsCount++;
                     } else {
-                        // GPS가 없는 사진은 마커들을 다 모은 뒤 중심 주변에 뿌리기 위해 임시값 지정
+                        // GPS 정보가 없는 사진은 임시 좌표 지정 (영역 bounds에는 포함하지 않음)
                         finalLat = 37.555142 + (Math.random() - 0.5) * 0.02;
                         finalLng = 126.970447 + (Math.random() - 0.5) * 0.02;
                     }
@@ -89,7 +88,7 @@ function loadLocalImages() {
                     resizeImage(relativePath, 100, orientation, function(resizedCanvasUrl) {
                         createPhotoMarker(finalLat, finalLng, resizedCanvasUrl);
                         
-                        // 비동기 카운트 체크: 마지막 사진 처리가 끝났는지 확인
+                        // 마지막 사진까지 처리가 완료되었는지 확인
                         processedCount++;
                         if (processedCount === IMAGE_FILES.length) {
                             fitMapToMarkers(bounds, validGpsCount);
@@ -107,22 +106,23 @@ function loadLocalImages() {
     });
 }
 
-// [신규] 모든 마커가 화면에 꽉 차게 들어오도록 포커싱하는 함수
+// [완벽 피팅 핵심 로직]
 function fitMapToMarkers(bounds, validGpsCount) {
     if (!map) return;
 
     if (validGpsCount > 0) {
-        // 모든 사진 좌표 정보가 포함된 영역으로 지도를 움직이고 줌 레벨을 맞춤
-        map.panToBounds(bounds);
+        // 1. 가장 왼쪽 위(NorthWest)와 가장 오른쪽 아래(SouthEast) 사진이 모두 들어오도록 화면 강제 연동
+        // 사방에 60px의 여백(padding)을 두어 마커가 화면 가장자리에 걸쳐서 잘리는 문제를 방지합니다.
+        map.fitBounds(bounds, {
+            top: 60,
+            right: 60,
+            bottom: 60,
+            left: 60
+        });
         
-        // 너무 타이트하게 확대되는 것을 방지하기 위해 줌 아웃 여유 유도 (옵션)
-        setTimeout(() => {
-            map.setZoom(map.getZoom() - 1, true);
-        }, 400);
-        
-        console.log(`🎯 총 ${validGpsCount}개의 위치 정보를 기반으로 화면 정렬 완료!`);
+        console.log(`🎯 총 ${validGpsCount}개의 사진 영역에 맞춰 지도를 최적의 크기로 조정했습니다.`);
     } else {
-        console.log("⚠️ 위치 정보(GPS)가 포함된 사진이 없어 기본 화면을 유지합니다.");
+        console.log("⚠️ GPS 정보가 포함된 사진이 없어 기본 서울 화면을 유지합니다.");
     }
 }
 
@@ -170,17 +170,4 @@ function createPhotoMarker(lat, lng, imageUrl) {
             box-shadow: 0 3px 10px rgba(0,0,0,0.3); overflow: hidden; background: #e0e0e0;
             display: flex; align-items: center; justify-content: center;
             transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); cursor: pointer;
-        " onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'">
-            <img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover; pointer-events: none;">
-        </div>
-    `;
-    const marker = new naver.maps.Marker({
-        position: position,
-        map: map,
-        icon: { content: markerContent, anchor: new naver.maps.Point(27.5, 27.5) }
-    });
-    markers.push(marker);
-}
-
-function triggerUpload() {}
-function handleFiles() {}
+        " onmouseover="this.style.transform='scale(1.15)'"
