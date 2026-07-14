@@ -1,11 +1,11 @@
 // =========================================================================
 // 전역 설정 및 변수
 // =========================================================================
-const APP_VERSION = "v1.5.0"; // GitHub Actions 자동화 버전
+const APP_VERSION = "v1.6.0"; // GitHub 웹 빌드 최적화 버전
 let map;
 let markers = [];
 
-// IMAGE_FILES는 GitHub Actions가 자동 생성해 주는 'images-list.js'에서 주입받음
+// IMAGE_FILES 배열은 GitHub Actions가 자동 생성하는 'images-list.js'에서 가져옵니다.
 
 window.onload = function() {
     initMap();
@@ -29,11 +29,11 @@ function initMap() {
     
     console.log(`지도 초기화 완료 (버전: ${APP_VERSION})`);
 
-    // 빌드된 이미지 리스트가 존재하는지 체크 후 로드
+    // 동적 생성된 배열이 존재하는지 확인 후 로드
     if (typeof IMAGE_FILES !== 'undefined') {
         loadLocalImages();
     } else {
-        console.warn("첫 빌드 전이거나 images-list.js 파일을 찾을 수 없습니다.");
+        console.warn("첫 사진 업로드 전이거나 images-list.js를 찾을 수 없습니다.");
     }
 }
 
@@ -57,7 +57,7 @@ function loadLocalImages() {
 
         fetch(relativePath)
             .then(response => {
-                if (!response.ok) throw new Error(`네트워크 응답 에러: ${relativePath}`);
+                if (!response.ok) throw new Error(`파일 로드 실패: ${relativePath}`);
                 return response.blob();
             })
             .then(blob => {
@@ -85,7 +85,7 @@ function loadLocalImages() {
                     });
                 });
             })
-            .catch(error => console.error("GitHub 호스트 이미지 로딩 실패:", error));
+            .catch(error => console.error("이미지 로딩 에러:", error));
     });
 
     setTimeout(() => {
