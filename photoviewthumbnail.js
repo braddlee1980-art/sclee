@@ -170,4 +170,17 @@ function createPhotoMarker(lat, lng, imageUrl) {
             box-shadow: 0 3px 10px rgba(0,0,0,0.3); overflow: hidden; background: #e0e0e0;
             display: flex; align-items: center; justify-content: center;
             transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); cursor: pointer;
-        " onmouseover="this.style.transform='scale(1.15)'"
+        " onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform='scale(1)'">
+            <img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover; pointer-events: none;">
+        </div>
+    `;
+    const marker = new naver.maps.Marker({
+        position: position,
+        map: map,
+        icon: { content: markerContent, anchor: new naver.maps.Point(27.5, 27.5) }
+    });
+    markers.push(marker);
+}
+
+function triggerUpload() {}
+function handleFiles() {}
