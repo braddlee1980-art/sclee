@@ -1,11 +1,9 @@
 // =========================================================================
 // 전역 설정 및 변수
 // =========================================================================
-const APP_VERSION = "v1.6.0"; // GitHub 웹 빌드 최적화 버전
+const APP_VERSION = "v1.7.0"; // 마커 전체 영역 피팅 기능 추가
 let map;
 let markers = [];
-
-// IMAGE_FILES 배열은 GitHub Actions가 자동 생성하는 'images-list.js'에서 가져옵니다.
 
 window.onload = function() {
     initMap();
@@ -17,9 +15,10 @@ function initMap() {
         return;
     }
     
+    // 최초 기본 화면 (사진 로드 전 보여줄 기본 위치)
     const mapOptions = {
         center: new naver.maps.LatLng(37.555142, 126.970447),
-        zoom: 13,
+        zoom: 11,
         zoomControl: true,
         zoomControlOptions: { position: naver.maps.Position.RIGHT_CENTER }
     };
@@ -29,11 +28,10 @@ function initMap() {
     
     console.log(`지도 초기화 완료 (버전: ${APP_VERSION})`);
 
-    // 동적 생성된 배열이 존재하는지 확인 후 로드
     if (typeof IMAGE_FILES !== 'undefined') {
         loadLocalImages();
     } else {
-        console.warn("첫 사진 업로드 전이거나 images-list.js를 찾을 수 없습니다.");
+        console.warn("images-list.js를 찾을 수 없습니다.");
     }
 }
 
@@ -47,10 +45,14 @@ function addVersionControl(mapInstance, versionText) {
     new naver.maps.CustomControl(versionEl, { position: naver.maps.Position.LEFT_BOTTOM }).setMap(mapInstance);
 }
 
+// [핵심 개편] 모든 비동기 사진 로드가 끝나는 것을 추적하여 화면을 이동시킵니다.
 function loadLocalImages() {
     if (IMAGE_FILES.length === 0) return;
 
-    let lastPosition = null;
+    // 네이버 지도에서 제공하는 "좌표들을 포함하는 사각형 사각영역(Bounds)" 객체 생성
+    const bounds = new naver.maps.LatLngBounds();
+    let processedCount = 0;
+    let validGpsCount = 0;
 
     IMAGE_FILES.forEach((fileName) => {
         const relativePath = `img/${fileName}`;
@@ -73,24 +75,55 @@ function loadLocalImages() {
                     if (lat && lng) {
                         finalLat = convertToDecimal(lat, latRef);
                         finalLng = convertToDecimal(lng, lngRef);
+                        
+                        // GPS 정보가 올바르게 있는 좌표만 영역에 확장 포함시킴
+                        const point = new naver.maps.LatLng(finalLat, finalLng);
+                        bounds.extend(point);
+                        validGpsCount++;
                     } else {
+                        // GPS가 없는 사진은 마커들을 다 모은 뒤 중심 주변에 뿌리기 위해 임시값 지정
                         finalLat = 37.555142 + (Math.random() - 0.5) * 0.02;
                         finalLng = 126.970447 + (Math.random() - 0.5) * 0.02;
                     }
 
-                    lastPosition = new naver.maps.LatLng(finalLat, finalLng);
-                    
                     resizeImage(relativePath, 100, orientation, function(resizedCanvasUrl) {
                         createPhotoMarker(finalLat, finalLng, resizedCanvasUrl);
+                        
+                        // 비동기 카운트 체크: 마지막 사진 처리가 끝났는지 확인
+                        processedCount++;
+                        if (processedCount === IMAGE_FILES.length) {
+                            fitMapToMarkers(bounds, validGpsCount);
+                        }
                     });
                 });
             })
-            .catch(error => console.error("이미지 로딩 에러:", error));
+            .catch(error => {
+                console.error("이미지 로딩 에러:", error);
+                processedCount++;
+                if (processedCount === IMAGE_FILES.length) {
+                    fitMapToMarkers(bounds, validGpsCount);
+                }
+            });
     });
+}
 
-    setTimeout(() => {
-        if (lastPosition && map) map.panTo(lastPosition); 
-    }, 600);
+// [신규] 모든 마커가 화면에 꽉 차게 들어오도록 포커싱하는 함수
+function fitMapToMarkers(bounds, validGpsCount) {
+    if (!map) return;
+
+    if (validGpsCount > 0) {
+        // 모든 사진 좌표 정보가 포함된 영역으로 지도를 움직이고 줌 레벨을 맞춤
+        map.panToBounds(bounds);
+        
+        // 너무 타이트하게 확대되는 것을 방지하기 위해 줌 아웃 여유 유도 (옵션)
+        setTimeout(() => {
+            map.setZoom(map.getZoom() - 1, true);
+        }, 400);
+        
+        console.log(`🎯 총 ${validGpsCount}개의 위치 정보를 기반으로 화면 정렬 완료!`);
+    } else {
+        console.log("⚠️ 위치 정보(GPS)가 포함된 사진이 없어 기본 화면을 유지합니다.");
+    }
 }
 
 function resizeImage(imgUrl, targetSize, orientation, callback) {
