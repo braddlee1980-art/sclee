@@ -1,11 +1,11 @@
 // =========================================================================
-// MapPhoto [MARKER & CLUSTER MODULE] - v2.3.0
+// MapPhoto [MARKER & CLUSTER MODULE] - v2.4.0
 // =========================================================================
 
 // 비동기로 수집된 사진 정보들을 분석하여 최종 마커를 생성하는 메인 엔진
 function processAndRenderMarkers(photoList, bounds, validGpsCount) {
     const visited = new Array(photoList.length).fill(false);
-    let markerDelayIndex = 0; // [신규] 애니메이션 순차 지연을 위한 인덱스 카운터
+    let markerDelayIndex = 0;
 
     for (let i = 0; i < photoList.length; i++) {
         if (visited[i]) continue;
@@ -44,7 +44,6 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
                 targetLng += radius * Math.cos(angle) * 1.2;
             }
 
-            // 마커 생성 시 순차 지연 인덱스(markerDelayIndex)를 함께 전달
             createPhotoMarker(targetLat, targetLng, photo.url, photo.originalUrl, markerDelayIndex++);
             bounds.extend(new naver.maps.LatLng(targetLat, targetLng));
         });
@@ -61,13 +60,26 @@ function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex) {
     if (typeof map === 'undefined' || !map) return;
     const position = new naver.maps.LatLng(lat, lng);
     
-    // [신규] CSS Keyframes 애니메이션 스타일을 문서에 한 번만 주입
     injectMarkerAnimationStyles();
 
-    // [개선] 초기에는 크기가 0이었다가, 약간의 시차(delay)를 두고 뿅 나타나 통통 튀는 효과 적용
-    const animationDelay = delayIndex * 0.08; // 각 마커마다 0.08초의 시차를 둠
+    const animationDelay = delayIndex * 0.08;
     
     const markerContent = `
         <div class="map-photo-marker" style="
             width: 55px; height: 55px; border-radius: 50%; border: 3px solid white; 
-            box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.3); overflow: hidden; background: #e0e0e0;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            transform: scale(0);
+            animation: markerPopIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+            animation-delay: ${animationDelay}s;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        " onmouseover="this.style.transform='scale(1.15)';" onmouseout="this.style.transform='scale(1)'">
+            <img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover; pointer-events: none;">
+        </div>
+    `;
+    
+    const marker = new naver.maps.Marker({
+        position: position,
+        map: map,
+        icon: { content: markerContent, anchor: new na
