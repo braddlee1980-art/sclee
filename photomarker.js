@@ -114,4 +114,39 @@ function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex, extraCou
             targetMap.morph(position, targetMap.getZoom(), { duration: 250 });
         }
 
-        if (typeof openPhotoModal === 'function')
+        if (typeof openPhotoModal === 'function') {
+            openPhotoModal(originalUrl);
+        } else {
+            console.error("photomodal.js 모듈이 로드되지 않았습니다.");
+        }
+    });
+
+    markers.push(marker);
+}
+
+function injectMarkerAnimationStyles() {
+    if (document.getElementById('map-marker-animation-styles')) return;
+    
+    const styleHtml = `
+        <style id="map-marker-animation-styles">
+            @keyframes markerPopIn {
+                0% { transform: scale(0); opacity: 0; }
+                70% { transform: scale(1.1); }
+                100% { transform: scale(1); opacity: 1; }
+            }
+        </style>
+    `;
+    document.head.insertAdjacentHTML('beforeend', styleHtml);
+}
+
+// 거리 계산 유틸리티
+function getDistance(lat1, lng1, lat2, lng2) {
+    const R = 6371e3;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
