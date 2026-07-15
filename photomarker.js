@@ -1,8 +1,8 @@
 // =========================================================================
-// MapPhoto [MARKER & CLUSTER MODULE] - v2.4.1
+// MapPhoto [MARKER & CLUSTER MODULE] - v2.5.0
 // =========================================================================
 
-// 비동기로 수집된 사진 정보들을 분석하여 최종 마커를 생성하는 메인 엔진
+// 비동기로 수집된 사진 정보들을 분석하여 대표 마커와 카운트를 생성하는 엔진
 function processAndRenderMarkers(photoList, bounds, validGpsCount) {
     const visited = new Array(photoList.length).fill(false);
     let markerDelayIndex = 0;
@@ -12,41 +12,42 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
         
         // GPS 정보가 결여된 사진 처리
         if (!photoList[i].hasGps) {
-            createPhotoMarker(photoList[i].lat, photoList[i].lng, photoList[i].url, photoList[i].originalUrl, markerDelayIndex++);
+            createPhotoMarker(photoList[i].lat, photoList[i].lng, photoList[i].url, photoList[i].originalUrl, markerDelayIndex++, 0);
             continue;
         }
 
         const cluster = [photoList[i]];
         visited[i] = true;
 
-        // 100m 이내 같은 날짜 뭉침 탐지 연산
+        // [변경] 같은 날짜이면서 '5km(5000m)' 이내에 뭉침 탐지 연산
         for (let j = i + 1; j < photoList.length; j++) {
             if (visited[j] || !photoList[j].hasGps) continue;
 
             if (photoList[i].date === photoList[j].date) {
                 const distance = getDistance(photoList[i].lat, photoList[i].lng, photoList[j].lat, photoList[j].lng);
-                if (distance <= 100) {
+                if (distance <= 5000) { // 5km 기준
                     cluster.push(photoList[j]);
                     visited[j] = true;
                 }
             }
         }
 
-        // 뭉친 사진들 반 이상 겹치지 않게 나선형 분산 적용
-        cluster.forEach((photo, index) => {
-            let targetLat = photo.lat;
-            let targetLng = photo.lng;
+        // 뭉친 그룹의 첫 번째 사진을 대표 사진으로 지정
+        const representativePhoto = cluster[0];
+        // 나를 제외한 추가 사진 개수 계산 (예: 4장 뭉쳤으면 +3)
+        const extraCount = cluster.length - 1;
 
-            if (index > 0) {
-                const angle = index * 2.39996; 
-                const radius = 0.00035 * Math.sqrt(index);
-                targetLat += radius * Math.sin(angle);
-                targetLng += radius * Math.cos(angle) * 1.2;
-            }
+        // 대표 마커 하나만 생성 (extraCount 전달)
+        createPhotoMarker(
+            representativePhoto.lat, 
+            representativePhoto.lng, 
+            representativePhoto.url, 
+            representativePhoto.originalUrl, 
+            markerDelayIndex++, 
+            extraCount
+        );
 
-            createPhotoMarker(targetLat, targetLng, photo.url, photo.originalUrl, markerDelayIndex++);
-            bounds.extend(new naver.maps.LatLng(targetLat, targetLng));
-        });
+        bounds.extend(new naver.maps.LatLng(representativePhoto.lat, representativePhoto.lng));
     }
 
     // 마커 생성이 완전히 끝나면 맵의 화면을 최적 피팅시킴
@@ -55,9 +56,8 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
     }
 }
 
-// 네이버 지도 엘리먼트로 커스텀 마커 오브젝트 빌드
-function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex) {
-    // 전역 window 스코프에서 map 객체 검증
+// 네이버 지도 엘리먼트로 커스텀 마커 오브젝트 빌드 (+숫자 배지 추가)
+function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex, extraCount) {
     const currentMap = window.map || map;
     if (typeof currentMap === 'undefined' || !currentMap) return;
     
@@ -66,10 +66,30 @@ function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex) {
 
     const animationDelay = delayIndex * 0.08;
     
+    // [신규] 2장 이상 뭉쳐있을 경우 오른쪽 하단에 붉은색/오렌지색 계열의 숫자 배지 인라인 스타일 추가
+    const badgeHtml = extraCount > 0 ? `
+        <div style="
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            background: #ff4757;
+            color: white;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 3px 6px;
+            border-radius: 10px;
+            border: 2px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 10;
+            line-height: 1;
+        ">+${extraCount}</div>
+    ` : '';
+    
     const markerContent = `
         <div class="map-photo-marker" style="
+            position: relative;
             width: 55px; height: 55px; border-radius: 50%; border: 3px solid white; 
-            box-shadow: 0 3px 10px rgba(0,0,0,0.3); overflow: hidden; background: #e0e0e0;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.3); background: #e0e0e0;
             display: flex; align-items: center; justify-content: center;
             cursor: pointer;
             transform: scale(0);
@@ -77,7 +97,8 @@ function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex) {
             animation-delay: ${animationDelay}s;
             transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         " onmouseover="this.style.transform='scale(1.15)';" onmouseout="this.style.transform='scale(1)'">
-            <img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover; pointer-events: none;">
+            <img src="${imageUrl}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; pointer-events: none;">
+            ${badgeHtml}
         </div>
     `;
     
@@ -87,16 +108,13 @@ function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex) {
         icon: { content: markerContent, anchor: new naver.maps.Point(27.5, 27.5) }
     });
 
-    // [확실한 수정] 클릭 이벤트 핸들러 강화
+    // 클릭 이벤트 핸들러
     naver.maps.Event.addListener(marker, 'click', function() {
         const targetMap = window.map || map;
-        
         if (targetMap) {
-            // 1. 확실하게 지도의 중심을 클릭한 좌표로 강제 변경 (애니메이션 동반)
             targetMap.morph(position, targetMap.getZoom(), { duration: 250 });
         }
 
-        // 2. 모달 팝업 호출
         if (typeof openPhotoModal === 'function') {
             openPhotoModal(originalUrl);
         } else {
@@ -122,6 +140,7 @@ function injectMarkerAnimationStyles() {
     document.head.insertAdjacentHTML('beforeend', styleHtml);
 }
 
+// 거리 계산 유틸리티 (미터 단위를 반환)
 function getDistance(lat1, lng1, lat2, lng2) {
     const R = 6371e3;
     const dLat = (lat2 - lat1) * Math.PI / 180;
