@@ -1,13 +1,13 @@
 // =========================================================================
-// MapPhoto [CORE & ENGINE LOGIC MODULE] - v2.2.0
+// MapPhoto [CORE & ENGINE LOGIC MODULE] - v2.5.3
 // =========================================================================
-const APP_VERSION = "v2.2.0"; 
-let map;
+const APP_VERSION = "v2.5.3"; 
+let map; // 기존 호환성 유지용 전역 변수
 let markers = [];
 
 window.onload = function() {
     initMap();
-    if (typeof initPhotoModal === 'function') initPhotoModal(); // 모달 초기화 위임
+    if (typeof initPhotoModal === 'function') initPhotoModal();
 };
 
 function initMap() {
@@ -23,7 +23,10 @@ function initMap() {
         zoomControlOptions: { position: naver.maps.Position.RIGHT_CENTER }
     };
     
+    // [수정] 일반 전역 변수 'map'과 최상위 브라우저 공간 'window.map'에 동시에 확실히 등록합니다.
     map = new naver.maps.Map('map-container', mapOptions);
+    window.map = map; 
+    
     addVersionControl(map, APP_VERSION);
     
     console.log(`지도 코어 엔진 초기화 완료 (버전: ${APP_VERSION})`);
@@ -97,7 +100,6 @@ function loadLocalImages() {
                         
                         processedCount++;
                         if (processedCount === IMAGE_FILES.length) {
-                            // 데이터 수집 완료 시 외부 모듈(photomarker.js)로 연산 이관
                             if (typeof processAndRenderMarkers === 'function') {
                                 processAndRenderMarkers(photoDataList, bounds, validGpsCount);
                             }
