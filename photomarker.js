@@ -1,5 +1,5 @@
 // =========================================================================
-// MapPhoto [MARKER & CLUSTER MODULE] - v2.5.0
+// MapPhoto [MARKER & CLUSTER MODULE] - v2.5.1
 // =========================================================================
 
 // 비동기로 수집된 사진 정보들을 분석하여 대표 마커와 카운트를 생성하는 엔진
@@ -19,13 +19,13 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
         const cluster = [photoList[i]];
         visited[i] = true;
 
-        // [변경] 같은 날짜이면서 '5km(5000m)' 이내에 뭉침 탐지 연산
+        // [확장] 같은 날짜이면서 '7km(7000m)' 이내에 뭉침 탐지 연산
         for (let j = i + 1; j < photoList.length; j++) {
             if (visited[j] || !photoList[j].hasGps) continue;
 
             if (photoList[i].date === photoList[j].date) {
                 const distance = getDistance(photoList[i].lat, photoList[i].lng, photoList[j].lat, photoList[j].lng);
-                if (distance <= 5000) { // 5km 기준
+                if (distance <= 7000) { // 7km 기준으로 변경
                     cluster.push(photoList[j]);
                     visited[j] = true;
                 }
@@ -34,10 +34,10 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
 
         // 뭉친 그룹의 첫 번째 사진을 대표 사진으로 지정
         const representativePhoto = cluster[0];
-        // 나를 제외한 추가 사진 개수 계산 (예: 4장 뭉쳤으면 +3)
+        // 나를 제외한 추가 사진 개수 계산
         const extraCount = cluster.length - 1;
 
-        // 대표 마커 하나만 생성 (extraCount 전달)
+        // 대표 마커 하나만 생성
         createPhotoMarker(
             representativePhoto.lat, 
             representativePhoto.lng, 
@@ -66,7 +66,6 @@ function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex, extraCou
 
     const animationDelay = delayIndex * 0.08;
     
-    // [신규] 2장 이상 뭉쳐있을 경우 오른쪽 하단에 붉은색/오렌지색 계열의 숫자 배지 인라인 스타일 추가
     const badgeHtml = extraCount > 0 ? `
         <div style="
             position: absolute;
@@ -115,39 +114,4 @@ function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex, extraCou
             targetMap.morph(position, targetMap.getZoom(), { duration: 250 });
         }
 
-        if (typeof openPhotoModal === 'function') {
-            openPhotoModal(originalUrl);
-        } else {
-            console.error("photomodal.js 모듈이 로드되지 않았습니다.");
-        }
-    });
-
-    markers.push(marker);
-}
-
-function injectMarkerAnimationStyles() {
-    if (document.getElementById('map-marker-animation-styles')) return;
-    
-    const styleHtml = `
-        <style id="map-marker-animation-styles">
-            @keyframes markerPopIn {
-                0% { transform: scale(0); opacity: 0; }
-                70% { transform: scale(1.1); }
-                100% { transform: scale(1); opacity: 1; }
-            }
-        </style>
-    `;
-    document.head.insertAdjacentHTML('beforeend', styleHtml);
-}
-
-// 거리 계산 유틸리티 (미터 단위를 반환)
-function getDistance(lat1, lng1, lat2, lng2) {
-    const R = 6371e3;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLng/2) * Math.sin(dLng/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-}
+        if (typeof openPhotoModal === 'function')
