@@ -1,11 +1,14 @@
 // =========================================================================
-// MapPhoto [MARKER & CLUSTER MODULE] - v2.5.1
+// MapPhoto [MARKER & CLUSTER MODULE] - v2.5.3
 // =========================================================================
 
 // 비동기로 수집된 사진 정보들을 분석하여 대표 마커와 카운트를 생성하는 엔진
 function processAndRenderMarkers(photoList, bounds, validGpsCount) {
     const visited = new Array(photoList.length).fill(false);
     let markerDelayIndex = 0;
+    
+    const accurateBounds = new naver.maps.LatLngBounds();
+    let actualAddedGpsCount = 0;
 
     for (let i = 0; i < photoList.length; i++) {
         if (visited[i]) continue;
@@ -19,25 +22,22 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
         const cluster = [photoList[i]];
         visited[i] = true;
 
-        // [확장] 같은 날짜이면서 '7km(7000m)' 이내에 뭉침 탐지 연산
+        // 같은 날짜이면서 '7km(7000m)' 이내에 뭉침 탐지 연산
         for (let j = i + 1; j < photoList.length; j++) {
             if (visited[j] || !photoList[j].hasGps) continue;
 
             if (photoList[i].date === photoList[j].date) {
                 const distance = getDistance(photoList[i].lat, photoList[i].lng, photoList[j].lat, photoList[j].lng);
-                if (distance <= 7000) { // 7km 기준으로 변경
+                if (distance <= 7000) {
                     cluster.push(photoList[j]);
                     visited[j] = true;
                 }
             }
         }
 
-        // 뭉친 그룹의 첫 번째 사진을 대표 사진으로 지정
         const representativePhoto = cluster[0];
-        // 나를 제외한 추가 사진 개수 계산
         const extraCount = cluster.length - 1;
 
-        // 대표 마커 하나만 생성
         createPhotoMarker(
             representativePhoto.lat, 
             representativePhoto.lng, 
@@ -47,19 +47,28 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
             extraCount
         );
 
-        bounds.extend(new naver.maps.LatLng(representativePhoto.lat, representativePhoto.lng));
+        if (representativePhoto.hasGps) {
+            accurateBounds.extend(new naver.maps.LatLng(representativePhoto.lat, representativePhoto.lng));
+            actualAddedGpsCount++;
+        }
     }
 
-    // 마커 생성이 완전히 끝나면 맵의 화면을 최적 피팅시킴
-    if (validGpsCount > 0 && typeof window.map !== 'undefined') {
-        window.map.fitBounds(bounds, { top: 60, right: 60, bottom: 60, left: 60 });
+    const currentMap = window.map || map;
+    if (actualAddedGpsCount > 0 && typeof currentMap !== 'undefined' && currentMap) {
+        setTimeout(() => {
+            currentMap.fitBounds(accurateBounds, { top: 80, right: 80, bottom: 80, left: 80 });
+        }, 200);
     }
 }
 
-// 네이버 지도 엘리먼트로 커스텀 마커 오브젝트 빌드 (+숫자 배지 추가)
+// 네이버 지도 엘리먼트로 커스텀 마커 오브젝트 빌드
 function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex, extraCount) {
-    const currentMap = window.map || map;
-    if (typeof currentMap === 'undefined' || !currentMap) return;
+    // [안전장치] window.map을 우선 타겟팅하고, 실패하면 전역 map 변수 확인
+    const currentMap = window.map || (typeof map !== 'undefined' ? map : null);
+    if (!currentMap) {
+        console.warn("지도 객체를 아직 사용할 수 없어 마커를 생성하지 못했습니다. 타이밍을 재확인합니다.");
+        return;
+    }
     
     const position = new naver.maps.LatLng(lat, lng);
     injectMarkerAnimationStyles();
@@ -107,9 +116,8 @@ function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex, extraCou
         icon: { content: markerContent, anchor: new naver.maps.Point(27.5, 27.5) }
     });
 
-    // 클릭 이벤트 핸들러
     naver.maps.Event.addListener(marker, 'click', function() {
-        const targetMap = window.map || map;
+        const targetMap = window.map || (typeof map !== 'undefined' ? map : null);
         if (targetMap) {
             targetMap.morph(position, targetMap.getZoom(), { duration: 250 });
         }
@@ -121,7 +129,10 @@ function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex, extraCou
         }
     });
 
-    markers.push(marker);
+    // 전역 마커 어레이에 등록 시도
+    if (typeof markers !== 'undefined') {
+        markers.push(marker);
+    }
 }
 
 function injectMarkerAnimationStyles() {
