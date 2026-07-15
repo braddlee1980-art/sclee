@@ -1,5 +1,5 @@
 // =========================================================================
-// MapPhoto [MARKER & CLUSTER MODULE] - v2.4.0
+// MapPhoto [MARKER & CLUSTER MODULE] - v2.4.1
 // =========================================================================
 
 // 비동기로 수집된 사진 정보들을 분석하여 최종 마커를 생성하는 메인 엔진
@@ -50,16 +50,18 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
     }
 
     // 마커 생성이 완전히 끝나면 맵의 화면을 최적 피팅시킴
-    if (validGpsCount > 0 && typeof map !== 'undefined') {
-        map.fitBounds(bounds, { top: 60, right: 60, bottom: 60, left: 60 });
+    if (validGpsCount > 0 && typeof window.map !== 'undefined') {
+        window.map.fitBounds(bounds, { top: 60, right: 60, bottom: 60, left: 60 });
     }
 }
 
 // 네이버 지도 엘리먼트로 커스텀 마커 오브젝트 빌드
 function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex) {
-    if (typeof map === 'undefined' || !map) return;
-    const position = new naver.maps.LatLng(lat, lng);
+    // 전역 window 스코프에서 map 객체 검증
+    const currentMap = window.map || map;
+    if (typeof currentMap === 'undefined' || !currentMap) return;
     
+    const position = new naver.maps.LatLng(lat, lng);
     injectMarkerAnimationStyles();
 
     const animationDelay = delayIndex * 0.08;
@@ -81,5 +83,52 @@ function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex) {
     
     const marker = new naver.maps.Marker({
         position: position,
-        map: map,
-        icon: { content: markerContent, anchor: new na
+        map: currentMap,
+        icon: { content: markerContent, anchor: new naver.maps.Point(27.5, 27.5) }
+    });
+
+    // [확실한 수정] 클릭 이벤트 핸들러 강화
+    naver.maps.Event.addListener(marker, 'click', function() {
+        const targetMap = window.map || map;
+        
+        if (targetMap) {
+            // 1. 확실하게 지도의 중심을 클릭한 좌표로 강제 변경 (애니메이션 동반)
+            targetMap.morph(position, targetMap.getZoom(), { duration: 250 });
+        }
+
+        // 2. 모달 팝업 호출
+        if (typeof openPhotoModal === 'function') {
+            openPhotoModal(originalUrl);
+        } else {
+            console.error("photomodal.js 모듈이 로드되지 않았습니다.");
+        }
+    });
+
+    markers.push(marker);
+}
+
+function injectMarkerAnimationStyles() {
+    if (document.getElementById('map-marker-animation-styles')) return;
+    
+    const styleHtml = `
+        <style id="map-marker-animation-styles">
+            @keyframes markerPopIn {
+                0% { transform: scale(0); opacity: 0; }
+                70% { transform: scale(1.1); }
+                100% { transform: scale(1); opacity: 1; }
+            }
+        </style>
+    `;
+    document.head.insertAdjacentHTML('beforeend', styleHtml);
+}
+
+function getDistance(lat1, lng1, lat2, lng2) {
+    const R = 6371e3;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
