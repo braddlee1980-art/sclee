@@ -1,18 +1,16 @@
 // =========================================================================
-// MapPhoto [CORE & ENGINE LOGIC MODULE] - v2.6.5 (크로스 브라우저 완전 판)
+// MapPhoto [CORE & ENGINE LOGIC MODULE] - v2.6.9 (중재자 핸들러 포함)
 // =========================================================================
-const APP_VERSION = "v2.6.5"; 
+const APP_VERSION = "v2.6.9"; 
 let map;
 let markers = [];
 
 const GATSBY_ISLAND_LAT = 33.020000; 
 const GATSBY_ISLAND_LNG = 126.550000;
 
-// [긴급 수정] 네이버 지도 스크립트가 완전히 로드되었을 때 실행되는 표준 이벤트 바인딩
 if (typeof naver !== 'undefined' && naver.maps && naver.maps.onJSContentLoaded) {
     naver.maps.onJSContentLoaded(initMap);
 } else {
-    // 일반적인 브라우저 로딩 폴백
     if (document.readyState === 'complete') {
         setTimeout(initMap, 100);
     } else {
@@ -21,18 +19,14 @@ if (typeof naver !== 'undefined' && naver.maps && naver.maps.onJSContentLoaded) 
 }
 
 function initMap() {
-    // 중복 실행 및 네이버 객체 부재 철저 방어
     if (window.map || map) return; 
     if (typeof naver === 'undefined' || !naver.maps || !naver.maps.Map) {
-        console.error("네이버 지도 로드 실패: naver.maps.Map 인스턴스가 존재하지 않습니다.");
+        console.error("네이버 지도 로드 실패");
         return;
     }
 
     const mapContainer = document.getElementById('map-container');
-    if (!mapContainer) {
-        console.error("지도를 그릴 'map-container' 엘리먼트가 HTML에 존재하지 않습니다.");
-        return;
-    }
+    if (!mapContainer) return;
 
     const mapOptions = {
         center: new naver.maps.LatLng(33.200000, 126.550000),
@@ -42,7 +36,6 @@ function initMap() {
     };
     
     try {
-        // 지도 객체 생성 및 전역 바인딩
         map = new naver.maps.Map(mapContainer, mapOptions);
         window.map = map; 
         
@@ -50,20 +43,38 @@ function initMap() {
         drawGatsbyIsland(map);
         
         console.log(`[성공] 지도 초기화 완료 (버전: ${APP_VERSION})`);
-
-        // 아이패드 렌더링 깨짐 방지용 리프레시
         setTimeout(() => { if (map) map.refresh(); }, 150);
 
-        // 사진 파일 리스트 로드 시작
         if (typeof IMAGE_FILES !== 'undefined' && Array.isArray(IMAGE_FILES)) {
             loadLocalImages();
-        } else {
-            console.warn("images-list.js 파일이 없거나 IMAGE_FILES 배열이 선언되지 않았습니다.");
         }
     } catch (e) {
-        console.error("지도 인스턴스 초기화 중 치명적 예외 발생:", e);
+        console.error("지도 인스턴스 초기화 에러:", e);
     }
 }
+
+// [신규 설계 - Controller Bridge] 
+// photomarker.js와 photomodal.js의 상호작용을 중재하는 통로 함수
+window.handleMarkerClick = function(originalUrl, position) {
+    const targetMap = window.map || (typeof map !== 'undefined' ? map : null);
+    
+    // 1. 클릭 위치로 지도 부드럽게 이동시킴
+    if (targetMap && position) {
+        targetMap.morph(position, targetMap.getZoom(), { duration: 250 });
+    }
+
+    // 2. 모달 레이어가 활성화되어 있지 않다면 안전장치로 초기화 호출
+    if (!document.getElementById('map-photo-modal') && typeof initPhotoModal === 'function') {
+        initPhotoModal();
+    }
+
+    // 3. 사진 전체화면 모달 오픈 실행
+    if (typeof openPhotoModal === 'function' && originalUrl) {
+        openPhotoModal(originalUrl);
+    } else {
+        console.error("모달 열기 실패: openPhotoModal 함수가 유효하지 않거나 이미지 경로가 잘못되었습니다.", originalUrl);
+    }
+};
 
 function drawGatsbyIsland(mapInstance) {
     new naver.maps.Circle({
