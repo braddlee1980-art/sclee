@@ -125,4 +125,34 @@ function resizeImage(imgUrl, targetSize, orientation, callback) {
     img.onload = function() {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        let srcX = 0; let srcY = 0; let srcWidth = img
+        let srcX = 0; let srcY = 0; let srcWidth = img.width; let srcHeight = img.height;
+        if (img.width > img.height) { srcX = (img.width - img.height) / 2; srcWidth = img.height; } 
+        else { srcY = (img.height - img.width) / 2; srcHeight = img.width; }
+        canvas.width = targetSize; canvas.height = targetSize;
+        ctx.save();
+        switch (orientation) {
+            case 2: ctx.transform(-1, 0, 0, 1, targetSize, 0); break;
+            case 3: ctx.transform(-1, 0, 0, -1, targetSize, targetSize); break;
+            case 4: ctx.transform(1, 0, 0, -1, 0, targetSize); break;
+            case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;
+            case 6: ctx.transform(0, 1, -1, 0, targetSize, 0); break;
+            case 7: ctx.transform(0, -1, -1, 0, targetSize, targetSize); break;
+            case 8: ctx.transform(0, -1, 1, 0, 0, targetSize); break;
+            default: break;
+        }
+        ctx.drawImage(img, srcX, srcY, srcWidth, srcHeight, 0, 0, targetSize, targetSize);
+        ctx.restore();
+        const resizedUrl = canvas.toDataURL('image/jpeg', 0.75);
+        callback(resizedUrl);
+    };
+}
+
+function convertToDecimal(gpsData, ref) {
+    const degrees = gpsData[0]; const minutes = gpsData[1]; const seconds = gpsData[2];
+    let decimal = degrees + (minutes / 60) + (seconds / 3600);
+    if (ref === "S" || ref === "W") decimal = decimal * -1;
+    return decimal;
+}
+
+function triggerUpload() {}
+function handleFiles() {}
