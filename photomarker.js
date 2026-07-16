@@ -1,10 +1,8 @@
 // =========================================================================
-// MapPhoto [MARKER & CLUSTER MODULE] - v2.6.8 (모달 클릭 트리거 완전 보장)
+// MapPhoto [MARKER & CLUSTER MODULE] - v2.6.9 (이벤트 위임 적용)
 // =========================================================================
 
-// 비동기로 수집된 사진 정보들을 분석하여 대표 마커와 카운트를 생성하는 엔진 (1회성 생성 고정)
 function processAndRenderMarkers(photoList, bounds, validGpsCount) {
-    // [중요 개선] 이미 마커들이 지도 상에 생성되어 있다면 다시 연산하지 않고 철수 (깜빡임 방지 핵심)
     if (typeof markers !== 'undefined' && markers.length > 0) {
         console.log("마커가 이미 캐싱되어 있어 재렌더링을 스킵합니다.");
         return;
@@ -17,27 +15,21 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
     const visited = new Array(photoList.length).fill(false);
     let markerDelayIndex = 0;
     
-    // [핵심] 모든 마커(GPS 보유 마커 + Gatsby Island 가상 마커)를 전부 품을 수 있는 경계 상자 객체
     const accurateBounds = new naver.maps.LatLngBounds();
-    
-    // [중요] 위치 정보가 없는 사진들이 모일 가상의 섬 'Gatsby Island'의 중심 좌표 정의
     const GATSBY_ISLAND_LAT = 33.020000;
     const GATSBY_ISLAND_LNG = 126.550000;
     
-    // 위치 정보가 없는 사진(Gatsby Island로 갈 사진)이 최소 한 장이라도 있다면, 
-    // 지도 화면 계산 영역에 Gatsby Island 좌표를 미리 강제로 집어넣습니다.
     const hasAnyGpsMissingPhoto = photoList.some(photo => !photo.hasGps || isNaN(photo.lat) || isNaN(photo.lng));
     if (hasAnyGpsMissingPhoto) {
         accurateBounds.extend(new naver.maps.LatLng(GATSBY_ISLAND_LAT, GATSBY_ISLAND_LNG));
     }
 
-    let actualAddedGpsCount = hasAnyGpsMissingPhoto ? 1 : 0; // Gatsby Island가 포함되면 카운트 1 시작
+    let actualAddedGpsCount = hasAnyGpsMissingPhoto ? 1 : 0;
 
     for (let i = 0; i < photoList.length; i++) {
         if (!photoList[i]) continue;
         if (visited[i]) continue;
         
-        // GPS 정보가 결여된 사진 처리 -> Gatsby Island 영역 내부로 흩뿌림
         if (!photoList[i].hasGps || isNaN(photoList[i].lat) || isNaN(photoList[i].lng)) {
             const safeLat = !isNaN(photoList[i].lat) ? photoList[i].lat : GATSBY_ISLAND_LAT;
             const safeLng = !isNaN(photoList[i].lng) ? photoList[i].lng : GATSBY_ISLAND_LNG;
@@ -50,7 +42,6 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
         const cluster = [photoList[i]];
         visited[i] = true;
 
-        // 7km(7000m) 이내 뭉침 탐지 연산
         for (let j = i + 1; j < photoList.length; j++) {
             if (!photoList[j]) continue;
             if (visited[j]) continue;
@@ -87,13 +78,11 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
         );
 
         if (representativePhoto.hasGps && !isNaN(representativePhoto.lat) && !isNaN(representativePhoto.lng)) {
-            // 실제 GPS가 있는 사진 마커들의 좌표도 경계 상자에 추가
             accurateBounds.extend(new naver.maps.LatLng(representativePhoto.lat, representativePhoto.lng));
             actualAddedGpsCount++;
         }
     }
 
-    // [성공] 모든 실제 좌표 마커 + 개츠비 섬 좌표가 완벽하게 잡힌 경계 상자로 카메라 위치 피팅 수행
     const currentMap = window.map || (typeof map !== 'undefined' ? map : null);
     if (actualAddedGpsCount > 0 && currentMap) {
         setTimeout(() => {
@@ -111,7 +100,6 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
     }
 }
 
-// 네이버 지도 엘리먼트로 커스텀 마커 오브젝트 빌드
 function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex, extraCount) {
     const currentMap = window.map || (typeof map !== 'undefined' ? map : null);
     if (!currentMap) return;
@@ -149,24 +137,12 @@ function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex, extraCou
             icon: { content: markerContent, anchor: new naver.maps.Point(27.5, 27.5) }
         });
 
-        // [중요 수정] 마커 클릭 시 모달 열기 로직 예외 처리 강화
+        // [구조 조정] 직접 모달을 열지 않고, 전역 중재 핸들러에 이벤트 알림만 보냄
         naver.maps.Event.addListener(marker, 'click', function() {
-            const targetMap = window.map || (typeof map !== 'undefined' ? map : null);
-            if (targetMap) {
-                targetMap.morph(position, targetMap.getZoom(), { duration: 250 });
-            }
-
-            // 모달 레이어가 활성화되어 있지 않다면 강제로 먼저 생성
-            if (!document.getElementById('map-photo-modal') && typeof initPhotoModal === 'function') {
-                console.log("모달 레이어가 감지되지 않아 동적 초기화를 수행합니다.");
-                initPhotoModal();
-            }
-
-            // 원본 이미지 URL이 유효한 경우 안전하게 모달 오픈 실행
-            if (typeof openPhotoModal === 'function' && originalUrl) {
-                openPhotoModal(originalUrl);
+            if (typeof window.handleMarkerClick === 'function') {
+                window.handleMarkerClick(originalUrl, position);
             } else {
-                console.error("openPhotoModal 함수를 호출할 수 없거나 이미지 주소가 유효하지 않습니다.", originalUrl);
+                console.warn("중재 이벤트 핸들러(window.handleMarkerClick)가 정의되지 않았습니다.");
             }
         });
 
@@ -180,7 +156,6 @@ function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex, extraCou
 
 function injectMarkerAnimationStyles() {
     if (document.getElementById('map-marker-animation-styles')) return;
-    
     const styleHtml = `
         <style id="map-marker-animation-styles">
             @keyframes markerPopIn {
@@ -193,7 +168,6 @@ function injectMarkerAnimationStyles() {
     document.head.insertAdjacentHTML('beforeend', styleHtml);
 }
 
-// 거리 계산 유틸리티
 function getDistance(lat1, lng1, lat2, lng2) {
     const R = 6371e3;
     const dLat = (lat2 - lat1) * Math.PI / 180;
