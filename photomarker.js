@@ -1,10 +1,10 @@
 // =========================================================================
-// MapPhoto [MARKER & CLUSTER MODULE] - v2.6.6
+// MapPhoto [MARKER & CLUSTER MODULE] - v2.6.7 (Gatsby Island 피팅 통합본)
 // =========================================================================
 
 // 비동기로 수집된 사진 정보들을 분석하여 대표 마커와 카운트를 생성하는 엔진 (1회성 생성 고정)
 function processAndRenderMarkers(photoList, bounds, validGpsCount) {
-    // 이미 마커들이 지도 상에 생성되어 있다면 다시 연산하지 않고 철수 (깜빡임 방지 핵심)
+    // [중요 개선] 이미 마커들이 지도 상에 생성되어 있다면 다시 연산하지 않고 철수 (깜빡임 방지 핵심)
     if (typeof markers !== 'undefined' && markers.length > 0) {
         console.log("마커가 이미 캐싱되어 있어 재렌더링을 스킵합니다.");
         return;
@@ -17,25 +17,34 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
     const visited = new Array(photoList.length).fill(false);
     let markerDelayIndex = 0;
     
-    // [중요] 최상단(북쪽), 최하단(남쪽) 등 모든 마커를 안전하게 담을 경계 상자(Bounds) 객체 생성
+    // [핵심] 모든 마커(GPS 보유 마커 + Gatsby Island 가상 마커)를 전부 품을 수 있는 경계 상자 객체
     const accurateBounds = new naver.maps.LatLngBounds();
-    let actualAddedGpsCount = 0;
+    
+    // [중요] 위치 정보가 없는 사진들이 모일 가상의 섬 'Gatsby Island'의 중심 좌표 정의
+    const GATSBY_ISLAND_LAT = 33.020000;
+    const GATSBY_ISLAND_LNG = 126.550000;
+    
+    // 위치 정보가 없는 사진(Gatsby Island로 갈 사진)이 최소 한 장이라도 있다면, 
+    // 지도 화면 계산 영역에 Gatsby Island 좌표를 미리 강제로 집어넣습니다.
+    const hasAnyGpsMissingPhoto = photoList.some(photo => !photo.hasGps || isNaN(photo.lat) || isNaN(photo.lng));
+    if (hasAnyGpsMissingPhoto) {
+        accurateBounds.extend(new naver.maps.LatLng(GATSBY_ISLAND_LAT, GATSBY_ISLAND_LNG));
+    }
+
+    let actualAddedGpsCount = hasAnyGpsMissingPhoto ? 1 : 0; // Gatsby Island가 포함되면 카운트 1 시작
 
     for (let i = 0; i < photoList.length; i++) {
         if (!photoList[i]) continue;
         if (visited[i]) continue;
         
-        // GPS 정보가 결여된 사진 처리 (Gatsby Island 좌표 할당)
+        // GPS 정보가 결여된 사진 처리 -> Gatsby Island 영역 내부로 흩뿌림
         if (!photoList[i].hasGps || isNaN(photoList[i].lat) || isNaN(photoList[i].lng)) {
-            const safeLat = !isNaN(photoList[i].lat) ? photoList[i].lat : 33.020000;
-            const safeLng = !isNaN(photoList[i].lng) ? photoList[i].lng : 126.550000;
+            // photoviewthumbnail.js에서 미리 계산해서 넘겨준 Gatsby Island 좌표를 사용하되, 
+            // 안전장치로 혹시 누락되었을 경우 기본 섬 중심 좌표로 풀백(Fallback) 처리합니다.
+            const safeLat = !isNaN(photoList[i].lat) ? photoList[i].lat : GATSBY_ISLAND_LAT;
+            const safeLng = !isNaN(photoList[i].lng) ? photoList[i].lng : GATSBY_ISLAND_LNG;
             
             createPhotoMarker(safeLat, safeLng, photoList[i].url, photoList[i].originalUrl, markerDelayIndex++, 0);
-            
-            // Gatsby Island 근처에 배치된 마커 정보도 화면 영역 계산에 포함시킴
-            accurateBounds.extend(new naver.maps.LatLng(safeLat, safeLng));
-            actualAddedGpsCount++;
-            
             visited[i] = true;
             continue;
         }
@@ -80,19 +89,19 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
         );
 
         if (representativePhoto.hasGps && !isNaN(representativePhoto.lat) && !isNaN(representativePhoto.lng)) {
-            // 마커의 좌표를 맵 영역(Bounds)에 추가
+            // 실제 GPS가 있는 사진 마커들의 좌표도 경계 상자에 추가
             accurateBounds.extend(new naver.maps.LatLng(representativePhoto.lat, representativePhoto.lng));
             actualAddedGpsCount++;
         }
     }
 
-    // [최적화] 모든 마커(GPS 보유 실제 사진 + Gatsby Island 가상 마커)를 고려하여 초기 화면 맞춤 실행
+    // [성공] 모든 실제 좌표 마커 + 개츠비 섬 좌표가 완벽하게 잡힌 경계 상자로 카메라 위치 피팅 수행
     const currentMap = window.map || (typeof map !== 'undefined' ? map : null);
     if (actualAddedGpsCount > 0 && currentMap) {
         setTimeout(() => {
             try {
-                // [개선] 최상단, 최하단 마커의 이미지 크기(원형 55px)와 텍스트 레이블 여백을 고려하여
-                // 상하 120px, 좌우 100px의 아주 넉넉한 패딩(Margin)을 주어 마커 잘림 현상을 원천 방어합니다.
+                // 상하 120px, 좌우 100px의 여유로운 패딩값을 적용하여 
+                // 최북단 실제 사진 마커부터 최남단 개츠비 섬 마커까지 잘림 현상 없이 한 번에 꽉 차게 띄웁니다.
                 currentMap.fitBounds(accurateBounds, { 
                     top: 120, 
                     right: 100, 
@@ -102,7 +111,7 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
             } catch (boundsError) {
                 console.error("화면 맞춤 실행 에러:", boundsError);
             }
-        }, 300); // 렌더링 안정화를 위해 지연시간을 300ms로 소폭 확보
+        }, 300); // 렌더링 안정성을 위해 300ms 지연 후 작동
     }
 }
 
