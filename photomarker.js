@@ -1,5 +1,5 @@
 // =========================================================================
-// MapPhoto [MARKER & CLUSTER MODULE] - v2.6.7 (Gatsby Island 피팅 통합본)
+// MapPhoto [MARKER & CLUSTER MODULE] - v2.6.8 (모달 클릭 트리거 완전 보장)
 // =========================================================================
 
 // 비동기로 수집된 사진 정보들을 분석하여 대표 마커와 카운트를 생성하는 엔진 (1회성 생성 고정)
@@ -39,8 +39,6 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
         
         // GPS 정보가 결여된 사진 처리 -> Gatsby Island 영역 내부로 흩뿌림
         if (!photoList[i].hasGps || isNaN(photoList[i].lat) || isNaN(photoList[i].lng)) {
-            // photoviewthumbnail.js에서 미리 계산해서 넘겨준 Gatsby Island 좌표를 사용하되, 
-            // 안전장치로 혹시 누락되었을 경우 기본 섬 중심 좌표로 풀백(Fallback) 처리합니다.
             const safeLat = !isNaN(photoList[i].lat) ? photoList[i].lat : GATSBY_ISLAND_LAT;
             const safeLng = !isNaN(photoList[i].lng) ? photoList[i].lng : GATSBY_ISLAND_LNG;
             
@@ -100,8 +98,6 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
     if (actualAddedGpsCount > 0 && currentMap) {
         setTimeout(() => {
             try {
-                // 상하 120px, 좌우 100px의 여유로운 패딩값을 적용하여 
-                // 최북단 실제 사진 마커부터 최남단 개츠비 섬 마커까지 잘림 현상 없이 한 번에 꽉 차게 띄웁니다.
                 currentMap.fitBounds(accurateBounds, { 
                     top: 120, 
                     right: 100, 
@@ -111,7 +107,7 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
             } catch (boundsError) {
                 console.error("화면 맞춤 실행 에러:", boundsError);
             }
-        }, 300); // 렌더링 안정성을 위해 300ms 지연 후 작동
+        }, 300);
     }
 }
 
@@ -153,14 +149,24 @@ function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex, extraCou
             icon: { content: markerContent, anchor: new naver.maps.Point(27.5, 27.5) }
         });
 
+        // [중요 수정] 마커 클릭 시 모달 열기 로직 예외 처리 강화
         naver.maps.Event.addListener(marker, 'click', function() {
             const targetMap = window.map || (typeof map !== 'undefined' ? map : null);
             if (targetMap) {
                 targetMap.morph(position, targetMap.getZoom(), { duration: 250 });
             }
 
-            if (typeof openPhotoModal === 'function') {
+            // 모달 레이어가 활성화되어 있지 않다면 강제로 먼저 생성
+            if (!document.getElementById('map-photo-modal') && typeof initPhotoModal === 'function') {
+                console.log("모달 레이어가 감지되지 않아 동적 초기화를 수행합니다.");
+                initPhotoModal();
+            }
+
+            // 원본 이미지 URL이 유효한 경우 안전하게 모달 오픈 실행
+            if (typeof openPhotoModal === 'function' && originalUrl) {
                 openPhotoModal(originalUrl);
+            } else {
+                console.error("openPhotoModal 함수를 호출할 수 없거나 이미지 주소가 유효하지 않습니다.", originalUrl);
             }
         });
 
