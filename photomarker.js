@@ -1,30 +1,31 @@
 // =========================================================================
-// MapPhoto [MARKER & CLUSTER MODULE] - v2.5.4
+// MapPhoto [MARKER & CLUSTER MODULE] - v2.6.0
 // =========================================================================
 
-// 비동기로 수집된 사진 정보들을 분석하여 대표 마커와 카운트를 생성하는 엔진 (안전성 강화 버전)
+// 비동기로 수집된 사진 정보들을 분석하여 대표 마커와 카운트를 생성하는 엔진 (1회성 생성 고정)
 function processAndRenderMarkers(photoList, bounds, validGpsCount) {
-    // 1. 전달된 사진 리스트 유효성 선행 검증
+    // [중요 개선] 이미 마커들이 지도 상에 생성되어 있다면 다시 연산하지 않고 철수 (깜빡임 방지 핵심)
+    if (typeof markers !== 'undefined' && markers.length > 0) {
+        console.log("마커가 이미 캐싱되어 있어 재렌더링을 스킵합니다.");
+        return;
+    }
+
     if (!photoList || !Array.isArray(photoList) || photoList.length === 0) {
-        console.warn("처리할 사진 데이터 리스트가 비어있습니다.");
         return;
     }
 
     const visited = new Array(photoList.length).fill(false);
     let markerDelayIndex = 0;
     
-    // 안전한 화면 맞춤을 위한 전용 바운드 객체 생성
     const accurateBounds = new naver.maps.LatLngBounds();
     let actualAddedGpsCount = 0;
 
     for (let i = 0; i < photoList.length; i++) {
-        // 혹시 모를 깨진 데이터 방어 코드
         if (!photoList[i]) continue;
         if (visited[i]) continue;
         
         // GPS 정보가 결여된 사진 처리
         if (!photoList[i].hasGps || isNaN(photoList[i].lat) || isNaN(photoList[i].lng)) {
-            // 위경도가 올바른 숫자인지 최종 검증 후 마커 생성
             const safeLat = !isNaN(photoList[i].lat) ? photoList[i].lat : 37.555142;
             const safeLng = !isNaN(photoList[i].lng) ? photoList[i].lng : 126.970447;
             createPhotoMarker(safeLat, safeLng, photoList[i].url, photoList[i].originalUrl, markerDelayIndex++, 0);
@@ -35,37 +36,33 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
         const cluster = [photoList[i]];
         visited[i] = true;
 
-        // 7km(7000m) 이내 뭉침 연산 시 발생할 수 있는 에러 철저 방어
+        // 7km(7000m) 이내 뭉침 탐지 연산
         for (let j = i + 1; j < photoList.length; j++) {
             if (!photoList[j]) continue;
             if (visited[j]) continue;
             if (!photoList[j].hasGps || isNaN(photoList[j].lat) || isNaN(photoList[j].lng)) continue;
 
-            // 날짜 정보 안전 처리 (날짜 정보가 비어있을 경우 대비)
             const dateI = photoList[i].date || "NO_DATE";
             const dateJ = photoList[j].date || "NO_DATE";
 
             if (dateI === dateJ) {
                 try {
                     const distance = getDistance(photoList[i].lat, photoList[i].lng, photoList[j].lat, photoList[j].lng);
-                    // 거리 연산 결과가 유효한 숫자인지 더블 체크
                     if (!isNaN(distance) && distance <= 7000) {
                         cluster.push(photoList[j]);
                         visited[j] = true;
                     }
                 } catch (err) {
-                    console.error("거리 계산 도중 예외 발생:", err);
+                    console.error("거리 계산 에러:", err);
                 }
             }
         }
 
-        // 뭉친 그룹의 첫 번째 사진을 대표 사진으로 지정
         const representativePhoto = cluster[0];
         if (!representativePhoto) continue;
 
         const extraCount = cluster.length - 1;
 
-        // 최종 안전성 검증이 완료된 대표 마커 생성
         createPhotoMarker(
             representativePhoto.lat, 
             representativePhoto.lng, 
@@ -81,14 +78,14 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
         }
     }
 
-    // 맵 화면 최적 피팅 실행
+    // 초기 화면 피팅
     const currentMap = window.map || (typeof map !== 'undefined' ? map : null);
     if (actualAddedGpsCount > 0 && currentMap) {
         setTimeout(() => {
             try {
                 currentMap.fitBounds(accurateBounds, { top: 80, right: 80, bottom: 80, left: 80 });
             } catch (boundsError) {
-                console.error("화면 맞춤 실행 중 에러 발생:", boundsError);
+                console.error("화면 맞춤 실행 에러:", boundsError);
             }
         }, 250);
     }
@@ -98,8 +95,6 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
 function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex, extraCount) {
     const currentMap = window.map || (typeof map !== 'undefined' ? map : null);
     if (!currentMap) return;
-    
-    // 위/경도 데이터에 NaN이 들어오는 것을 완벽히 배제
     if (isNaN(lat) || isNaN(lng)) return;
 
     const position = new naver.maps.LatLng(lat, lng);
@@ -109,33 +104,18 @@ function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex, extraCou
     
     const badgeHtml = extraCount > 0 ? `
         <div style="
-            position: absolute;
-            bottom: -2px;
-            right: -2px;
-            background: #ff4757;
-            color: white;
-            font-size: 11px;
-            font-weight: bold;
-            padding: 3px 6px;
-            border-radius: 10px;
-            border: 2px solid white;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            z-index: 10;
-            line-height: 1;
+            position: absolute; bottom: -2px; right: -2px; background: #ff4757; color: white;
+            font-size: 11px; font-weight: bold; padding: 3px 6px; border-radius: 10px;
+            border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 10; line-height: 1;
         ">+${extraCount}</div>
     ` : '';
     
     const markerContent = `
         <div class="map-photo-marker" style="
-            position: relative;
-            width: 55px; height: 55px; border-radius: 50%; border: 3px solid white; 
-            box-shadow: 0 3px 10px rgba(0,0,0,0.3); background: #e0e0e0;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer;
-            transform: scale(0);
-            animation: markerPopIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-            animation-delay: ${animationDelay}s;
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative; width: 55px; height: 55px; border-radius: 50%; border: 3px solid white; 
+            box-shadow: 0 3px 10px rgba(0,0,0,0.3); background: #e0e0e0; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transform: scale(0); animation: markerPopIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+            animation-delay: ${animationDelay}s; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         " onmouseover="this.style.transform='scale(1.15)';" onmouseout="this.style.transform='scale(1)'">
             <img src="${imageUrl}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; pointer-events: none;">
             ${badgeHtml}
@@ -164,7 +144,7 @@ function createPhotoMarker(lat, lng, imageUrl, originalUrl, delayIndex, extraCou
             markers.push(marker);
         }
     } catch (markerError) {
-        console.error("네이버 지도 마커 인스턴스 생성 에러:", markerError);
+        console.error("마커 생성 에러:", markerError);
     }
 }
 
