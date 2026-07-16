@@ -1,16 +1,28 @@
 // =========================================================================
-// MapPhoto [CORE & ENGINE LOGIC MODULE] - v2.6.0
+// MapPhoto [CORE & ENGINE LOGIC MODULE] - v2.6.1
 // =========================================================================
-const APP_VERSION = "v2.6.0"; 
+const APP_VERSION = "v2.6.1"; 
 let map;
 let markers = [];
 
-window.onload = function() {
-    initMap();
+// [버그 수정] window.onload 대신 브라우저의 이벤트 리스너를 사용하여 덮어쓰기 현상 완전 방지
+window.addEventListener('blur', function() {}); // 브라우저 호환성용 빈 이벤트
+document.addEventListener('DOMContentLoaded', function() {
+    // DOM이 로드되면 즉시 실행하되, 네이버 API가 준비 안 되었을 때를 대비해 한 번 더 체크
+    if (typeof naver !== 'undefined' && naver.maps) {
+        initMap();
+    } else {
+        // 혹시 네이버 스크립트가 늦게 로드되면 window load 시점에 재시도
+        window.addEventListener('load', initMap);
+    }
+    
     if (typeof initPhotoModal === 'function') initPhotoModal();
-};
+});
 
 function initMap() {
+    // 중복 실행 방지
+    if (window.map || map) return; 
+
     if (typeof naver === 'undefined' || !naver.maps) {
         console.error("네이버 지도 스크립트가 로드되지 않았습니다.");
         return;
@@ -98,7 +110,6 @@ function loadLocalImages() {
                         });
                         
                         processedCount++;
-                        // [개선] 중간중간 호출하지 않고, 모든 사진의 다운로드 및 연산이 "100% 완료된 시점"에 딱 한 번만 실행
                         if (processedCount === IMAGE_FILES.length) {
                             if (typeof processAndRenderMarkers === 'function') {
                                 processAndRenderMarkers(photoDataList, bounds, validGpsCount);
