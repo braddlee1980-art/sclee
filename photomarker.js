@@ -1,10 +1,10 @@
 // =========================================================================
-// MapPhoto [MARKER & CLUSTER MODULE] - v2.6.0
+// MapPhoto [MARKER & CLUSTER MODULE] - v2.6.6
 // =========================================================================
 
 // 비동기로 수집된 사진 정보들을 분석하여 대표 마커와 카운트를 생성하는 엔진 (1회성 생성 고정)
 function processAndRenderMarkers(photoList, bounds, validGpsCount) {
-    // [중요 개선] 이미 마커들이 지도 상에 생성되어 있다면 다시 연산하지 않고 철수 (깜빡임 방지 핵심)
+    // 이미 마커들이 지도 상에 생성되어 있다면 다시 연산하지 않고 철수 (깜빡임 방지 핵심)
     if (typeof markers !== 'undefined' && markers.length > 0) {
         console.log("마커가 이미 캐싱되어 있어 재렌더링을 스킵합니다.");
         return;
@@ -17,6 +17,7 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
     const visited = new Array(photoList.length).fill(false);
     let markerDelayIndex = 0;
     
+    // [중요] 최상단(북쪽), 최하단(남쪽) 등 모든 마커를 안전하게 담을 경계 상자(Bounds) 객체 생성
     const accurateBounds = new naver.maps.LatLngBounds();
     let actualAddedGpsCount = 0;
 
@@ -24,11 +25,17 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
         if (!photoList[i]) continue;
         if (visited[i]) continue;
         
-        // GPS 정보가 결여된 사진 처리
+        // GPS 정보가 결여된 사진 처리 (Gatsby Island 좌표 할당)
         if (!photoList[i].hasGps || isNaN(photoList[i].lat) || isNaN(photoList[i].lng)) {
-            const safeLat = !isNaN(photoList[i].lat) ? photoList[i].lat : 37.555142;
-            const safeLng = !isNaN(photoList[i].lng) ? photoList[i].lng : 126.970447;
+            const safeLat = !isNaN(photoList[i].lat) ? photoList[i].lat : 33.020000;
+            const safeLng = !isNaN(photoList[i].lng) ? photoList[i].lng : 126.550000;
+            
             createPhotoMarker(safeLat, safeLng, photoList[i].url, photoList[i].originalUrl, markerDelayIndex++, 0);
+            
+            // Gatsby Island 근처에 배치된 마커 정보도 화면 영역 계산에 포함시킴
+            accurateBounds.extend(new naver.maps.LatLng(safeLat, safeLng));
+            actualAddedGpsCount++;
+            
             visited[i] = true;
             continue;
         }
@@ -73,21 +80,29 @@ function processAndRenderMarkers(photoList, bounds, validGpsCount) {
         );
 
         if (representativePhoto.hasGps && !isNaN(representativePhoto.lat) && !isNaN(representativePhoto.lng)) {
+            // 마커의 좌표를 맵 영역(Bounds)에 추가
             accurateBounds.extend(new naver.maps.LatLng(representativePhoto.lat, representativePhoto.lng));
             actualAddedGpsCount++;
         }
     }
 
-    // 초기 화면 피팅
+    // [최적화] 모든 마커(GPS 보유 실제 사진 + Gatsby Island 가상 마커)를 고려하여 초기 화면 맞춤 실행
     const currentMap = window.map || (typeof map !== 'undefined' ? map : null);
     if (actualAddedGpsCount > 0 && currentMap) {
         setTimeout(() => {
             try {
-                currentMap.fitBounds(accurateBounds, { top: 80, right: 80, bottom: 80, left: 80 });
+                // [개선] 최상단, 최하단 마커의 이미지 크기(원형 55px)와 텍스트 레이블 여백을 고려하여
+                // 상하 120px, 좌우 100px의 아주 넉넉한 패딩(Margin)을 주어 마커 잘림 현상을 원천 방어합니다.
+                currentMap.fitBounds(accurateBounds, { 
+                    top: 120, 
+                    right: 100, 
+                    bottom: 120, 
+                    left: 100 
+                });
             } catch (boundsError) {
                 console.error("화면 맞춤 실행 에러:", boundsError);
             }
-        }, 250);
+        }, 300); // 렌더링 안정화를 위해 지연시간을 300ms로 소폭 확보
     }
 }
 
