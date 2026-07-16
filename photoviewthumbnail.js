@@ -1,39 +1,36 @@
 // =========================================================================
-// MapPhoto [CORE & ENGINE LOGIC MODULE] - v2.6.4 (태블릿 호환성 패치)
+// MapPhoto [CORE & ENGINE LOGIC MODULE] - v2.6.5 (크로스 브라우저 완전 판)
 // =========================================================================
-const APP_VERSION = "v2.6.4"; 
+const APP_VERSION = "v2.6.5"; 
 let map;
 let markers = [];
 
 const GATSBY_ISLAND_LAT = 33.020000; 
 const GATSBY_ISLAND_LNG = 126.550000;
 
-// [보정] 아이패드 등 WebKit 엔진의 타이밍 버그를 잡기 위해 다중 초기화 트래킹 적용
-function tryInitMap() {
-    if (window.map || map) return; // 이미 생성되었다면 중복 차단
-
-    if (typeof naver !== 'undefined' && naver.maps) {
-        initMap();
+// [긴급 수정] 네이버 지도 스크립트가 완전히 로드되었을 때 실행되는 표준 이벤트 바인딩
+if (typeof naver !== 'undefined' && naver.maps && naver.maps.onJSContentLoaded) {
+    naver.maps.onJSContentLoaded(initMap);
+} else {
+    // 일반적인 브라우저 로딩 폴백
+    if (document.readyState === 'complete') {
+        setTimeout(initMap, 100);
     } else {
-        // 아직 naver 객체가 없다면 100ms 후에 다시 시도 (폴백 로직)
-        setTimeout(tryInitMap, 100);
+        window.addEventListener('load', initMap);
     }
 }
 
-// 브라우저 로딩 상태에 관계없이 안전하게 트리거 확보
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', tryInitMap);
-} else {
-    tryInitMap();
-}
-window.addEventListener('load', tryInitMap);
-
 function initMap() {
+    // 중복 실행 및 네이버 객체 부재 철저 방어
     if (window.map || map) return; 
+    if (typeof naver === 'undefined' || !naver.maps || !naver.maps.Map) {
+        console.error("네이버 지도 로드 실패: naver.maps.Map 인스턴스가 존재하지 않습니다.");
+        return;
+    }
 
     const mapContainer = document.getElementById('map-container');
     if (!mapContainer) {
-        console.error("map-container 엘리먼트를 찾을 수 없습니다.");
+        console.error("지도를 그릴 'map-container' 엘리먼트가 HTML에 존재하지 않습니다.");
         return;
     }
 
@@ -44,22 +41,27 @@ function initMap() {
         zoomControlOptions: { position: naver.maps.Position.RIGHT_CENTER }
     };
     
-    // 지도 인스턴스 생성
-    map = new naver.maps.Map('map-container', mapOptions);
-    window.map = map; 
-    
-    addVersionControl(map, APP_VERSION);
-    drawGatsbyIsland(map);
-    
-    console.log(`지도 코어 엔진 초기화 완료 (버전: ${APP_VERSION})`);
+    try {
+        // 지도 객체 생성 및 전역 바인딩
+        map = new naver.maps.Map(mapContainer, mapOptions);
+        window.map = map; 
+        
+        addVersionControl(map, APP_VERSION);
+        drawGatsbyIsland(map);
+        
+        console.log(`[성공] 지도 초기화 완료 (버전: ${APP_VERSION})`);
 
-    // 지도 렌더링이 깨지는 것을 방지하기 위해 100ms 후 크기 강제 재계산
-    setTimeout(() => {
-        if (map) map.refresh();
-    }, 100);
+        // 아이패드 렌더링 깨짐 방지용 리프레시
+        setTimeout(() => { if (map) map.refresh(); }, 150);
 
-    if (typeof IMAGE_FILES !== 'undefined') {
-        loadLocalImages();
+        // 사진 파일 리스트 로드 시작
+        if (typeof IMAGE_FILES !== 'undefined' && Array.isArray(IMAGE_FILES)) {
+            loadLocalImages();
+        } else {
+            console.warn("images-list.js 파일이 없거나 IMAGE_FILES 배열이 선언되지 않았습니다.");
+        }
+    } catch (e) {
+        console.error("지도 인스턴스 초기화 중 치명적 예외 발생:", e);
     }
 }
 
@@ -123,7 +125,6 @@ function addVersionControl(mapInstance, versionText) {
 }
 
 function loadLocalImages() {
-    if (IMAGE_FILES.length === 0) return;
     const bounds = new naver.maps.LatLngBounds();
     let processedCount = 0;
     let validGpsCount = 0;
