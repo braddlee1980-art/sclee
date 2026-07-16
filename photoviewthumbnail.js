@@ -1,26 +1,24 @@
 // =========================================================================
-// MapPhoto [CORE & ENGINE LOGIC MODULE] - v2.6.1
+// MapPhoto [CORE & ENGINE LOGIC MODULE] - v2.6.2
 // =========================================================================
-const APP_VERSION = "v2.6.1"; 
+const APP_VERSION = "v2.6.2"; 
 let map;
 let markers = [];
 
-// [버그 수정] window.onload 대신 브라우저의 이벤트 리스너를 사용하여 덮어쓰기 현상 완전 방지
-window.addEventListener('blur', function() {}); // 브라우저 호환성용 빈 이벤트
+// 가상의 섬 'Gatsby Island'의 중심 좌표 (제주도 서귀포 남쪽 바다 쯤)
+const GATSBY_ISLAND_LAT = 33.120000;
+const GATSBY_ISLAND_LNG = 126.550000;
+
 document.addEventListener('DOMContentLoaded', function() {
-    // DOM이 로드되면 즉시 실행하되, 네이버 API가 준비 안 되었을 때를 대비해 한 번 더 체크
     if (typeof naver !== 'undefined' && naver.maps) {
         initMap();
     } else {
-        // 혹시 네이버 스크립트가 늦게 로드되면 window load 시점에 재시도
         window.addEventListener('load', initMap);
     }
-    
     if (typeof initPhotoModal === 'function') initPhotoModal();
 });
 
 function initMap() {
-    // 중복 실행 방지
     if (window.map || map) return; 
 
     if (typeof naver === 'undefined' || !naver.maps) {
@@ -28,9 +26,10 @@ function initMap() {
         return;
     }
     
+    // 최초 지도의 중심을 대한민국 전체가 잘 보이도록 약간 조율
     const mapOptions = {
-        center: new naver.maps.LatLng(37.555142, 126.970447),
-        zoom: 11,
+        center: new naver.maps.LatLng(36.000000, 127.500000),
+        zoom: 7,
         zoomControl: true,
         zoomControlOptions: { position: naver.maps.Position.RIGHT_CENTER }
     };
@@ -95,8 +94,9 @@ function loadLocalImages() {
                         hasGps = true;
                         validGpsCount++;
                     } else {
-                        finalLat = 37.555142 + (Math.random() - 0.5) * 0.02;
-                        finalLng = 126.970447 + (Math.random() - 0.5) * 0.02;
+                        // [개선] GPS 정보가 없으면 가상의 섬인 'Gatsby Island' 근처로 흩뿌림 (반경 대략 1~3km 내외)
+                        finalLat = GATSBY_ISLAND_LAT + (Math.random() - 0.5) * 0.03;
+                        finalLng = GATSBY_ISLAND_LNG + (Math.random() - 0.5) * 0.03;
                     }
 
                     resizeImage(relativePath, 100, orientation, function(resizedCanvasUrl) {
